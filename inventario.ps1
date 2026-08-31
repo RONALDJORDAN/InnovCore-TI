@@ -125,19 +125,34 @@ while ($executando) {
             $proximoNumero = $registrosAtuais.Count + 1
             $patrimonioSugerido = "PAT-" + $proximoNumero.ToString("D4")
             
-            # 2. Obter setores ja cadastrados anteriormente + setores comuns da InnovTech
-            $setoresPadrao = @("Operacional", "TI", "Financeiro", "RH", "Comercial", "Marketing", "Administrativo", "Logistica")
+            # 2. Lista Completa de Setores Oficiais da Empresa
+            $setoresPadrao = @(
+                "Operacional",
+                "Pedagogico",
+                "Financeiro",
+                "Marketing",
+                "Comercial",
+                "Administrativo",
+                "Administrativo / Financeiro",
+                "Logistica",
+                "Motoristas",
+                "Servicos Gerais / Limpeza",
+                "TI",
+                "RH"
+            )
+            
+            # Obtem setores do historico no CSV
             $setoresHistorico = @()
             if ($registrosAtuais.Count -gt 0) {
                 $setoresHistorico = @($registrosAtuais | ForEach-Object { $_.Setor.Trim() } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
             }
             
             $listaSetores = @()
-            # Prioriza setores do historico
+            # Prioriza os setores do historico no topo
             foreach ($s in $setoresHistorico) {
                 if ($listaSetores -notcontains $s) { $listaSetores += $s }
             }
-            # Adiciona setores padrao
+            # Adiciona os setores padrao oficiais
             foreach ($s in $setoresPadrao) {
                 if ($listaSetores -notcontains $s) { $listaSetores += $s }
             }
@@ -163,7 +178,7 @@ while ($executando) {
             Write-Host "`n [3/5] FUNCAO / CARGO" -ForegroundColor Yellow
             $funcao = ""
             while ([string]::IsNullOrWhiteSpace($funcao)) {
-                $funcao = Read-Host "   Cargo / Funcao (Ex: Operador, Analista, Gerente)"
+                $funcao = Read-Host "   Cargo / Funcao (Ex: Professor, Operador, Motorista, Analista)"
                 if ([string]::IsNullOrWhiteSpace($funcao)) {
                     Write-Host "   (!) Por favor, digite a funcao." -ForegroundColor Red
                 }
@@ -171,20 +186,21 @@ while ($executando) {
             
             # ----------------- [4/5] SETOR -----------------
             Write-Host "`n [4/5] SETOR / DEPARTAMENTO" -ForegroundColor Yellow
-            Write-Host "   Setores sugeridos:" -ForegroundColor Cyan
+            Write-Host "   Escolha um setor da lista ou digite um novo:" -ForegroundColor Cyan
             for ($i = 0; $i -lt $listaSetores.Count; $i++) {
+                $numFormatado = ($i + 1).ToString().PadLeft(2, ' ')
                 $ehHistorico = ($setoresHistorico -contains $listaSetores[$i])
                 $corSetor = if ($ehHistorico) { "Green" } else { "White" }
                 $tagHistorico = if ($ehHistorico) { " (*Ja Cadastrado*)" } else { "" }
                 
-                Write-Host "     [$($i + 1)] " -NoNewline -ForegroundColor Cyan
+                Write-Host "     [$numFormatado] " -NoNewline -ForegroundColor Cyan
                 Write-Host "$($listaSetores[$i])$tagHistorico" -ForegroundColor $corSetor
             }
-            Write-Host "     [0] Digitar um outro setor novo" -ForegroundColor Gray
+            Write-Host "     [ 0] Digitar um outro setor novo" -ForegroundColor Gray
             
             $setor = ""
             while ([string]::IsNullOrWhiteSpace($setor)) {
-                $setorInput = Read-Host "   Escolha o numero ou digite o nome do setor"
+                $setorInput = Read-Host "`n   Escolha o numero ou digite o nome do setor"
                 if ([string]::IsNullOrWhiteSpace($setorInput)) {
                     Write-Host "   (!) O setor nao pode ficar vazio." -ForegroundColor Red
                     continue
