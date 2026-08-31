@@ -1,0 +1,27 @@
+========================================================================
+       🤖 SKYNET TI - SISTEMA DE INVENTÁRIO (CYBERDYNE SYSTEMS)
+                Desenvolvido por Jordan | Versão 1.0
+========================================================================
+
+📁 ARQUIVOS DO PEN DRIVE:
+   Copie os 2 arquivos para o seu Pen Drive:
+   - executar_inventario.bat
+   - inventario.ps1
+
+🚀 COMO USAR:
+   1. Conecte o Pen Drive no computador (Windows 10 ou 11).
+   2. Dê 2 cliques no "executar_inventario.bat".
+   3. O Menu Principal Skynet será exibido:
+      [1] Iniciar Novo Cadastro (Inventariar o PC atual)
+      [2] Verificar Cadastros (Listar tudo o que já foi salvo)
+      [3] Excluir Cadastro (Remover um item se cadastrou errado)
+      [0] Sair (Hasta la vista, baby!)
+
+✨ RECURSOS AUTOMÁTICOS SKYNET:
+   - MEMÓRIA DE SETORES: Lembra todos os setores anteriores e coloca
+     no topo como [1], [2], [3]... para você só digitar o número!
+   - PATRIMÔNIO SEQUENCIAL: Gera automaticamente PAT-0001, PAT-0002...
+   - SCANNER CYBERDYNE: Coleta Marca, Modelo, Serial da BIOS e Ano de Fabricação.
+   - CÓPIA AUTOMÁTICA: Copia tudo para a Área de Transferência (Ctrl + V).
+   - PLANILHA CSV: Salva e acumula tudo no arquivo "inventario_skynet.csv".
+========================================================================
