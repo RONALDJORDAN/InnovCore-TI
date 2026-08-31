@@ -32,7 +32,7 @@ Sistema portátil, rápido e inteligente para inventariar computadores corporati
   - `[2]` Verificar Cadastros (Visualizar todos os equipamentos e abrir planilha no Excel)
   - `[3]` Excluir Cadastro (Remover registros com confirmação de segurança)
   - `[0]` Sair
-- **🧠 Memória de Setores Dinâmica:** Lembra todos os setores já cadastrados e coloca no topo como opções de dígito único `[1]`, `[2]`, `[3]`, etc.
+- **🧠 Memória de Setores Dinâmica:** Lembra todos os setores já cadastrados e coloca no topo como opções de dígito único `[ 1]`, `[ 2]`, `[ 3]`, etc.
 - **🔢 Patrimônio Sequencial Automático:** Gera automaticamente `PAT-0001`, `PAT-0002`, `PAT-0003`...
 - **🔍 Coleta Rápida de Hardware (CIM/WMI):**
   - Número de Série da BIOS (`Win32_BIOS` e fallback para `Win32_BaseBoard`)
@@ -48,7 +48,7 @@ Sistema portátil, rápido e inteligente para inventariar computadores corporati
 
 ```text
 projetos/
-├── VERSAO_FINAL_PENDRIVE/          # Pasta com os arquivos prontos para o Pen Drive
+├── InnovCore_TI/                   # Pasta oficial com os arquivos para o Pen Drive
 │   ├── executar_inventario.bat    # Executável (2 cliques) que abre o PowerShell
 │   ├── inventario.ps1             # Motor principal do InnovCore TI
 │   └── COMO_USAR.txt              # Guia rápido de utilização
@@ -62,7 +62,7 @@ projetos/
 
 ## 🚀 Como Usar no Pen Drive
 
-1. Copie o conteúdo da pasta `VERSAO_FINAL_PENDRIVE` para a raiz do seu **Pen Drive**.
+1. Copie o conteúdo da pasta `InnovCore_TI` para a raiz do seu **Pen Drive**.
 2. Conecte o Pen Drive no computador que deseja inventariar (Windows 10 ou 11).
 3. Dê **2 cliques** no arquivo `executar_inventario.bat`.
 4. Responda às perguntas interativas no prompt (ou pressione Enter para usar os valores sugeridos).
