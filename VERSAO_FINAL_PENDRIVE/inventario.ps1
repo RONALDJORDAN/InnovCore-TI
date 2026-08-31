@@ -15,7 +15,7 @@ $cabecalhoCsv = "Data_Registro;Empresa;Patrimonio;Usuario;Funcao;Setor;Marca;Mod
 $utf8ComBOM = New-Object System.Text.UTF8Encoding($true)
 $utf8SemBOM = New-Object System.Text.UTF8Encoding($false)
 
-# Funcao para exibir o Banner Inicial Estilizado do InnovCore TI
+# Funcao para exibir o Banner Inicial Estilizado e Colorido
 function Exibir-LogoPrincipal {
     Write-Host " +======================================================================+" -ForegroundColor Cyan
     Write-Host " |  ___ _   _ _   _  _____     ______ _____ ____  _____   _____ ___     |" -ForegroundColor Yellow
@@ -79,7 +79,7 @@ function Salvar-RegistrosCsv {
 }
 
 # ==============================================================================
-# MENU PRINCIPAL EM LOOP
+# MENU PRINCIPAL EM LOOP COLORIDO
 # ==============================================================================
 $executando = $true
 
@@ -87,15 +87,24 @@ while ($executando) {
     try { Clear-Host } catch {}
     Exibir-LogoPrincipal
     Write-Host " |                                                                      |" -ForegroundColor Cyan
-    Write-Host " |  [1] Iniciar Novo Cadastro (Inventariar este computador)             |" -ForegroundColor White
-    Write-Host " |  [2] Verificar Cadastros   (Listar registros salvos na planilha)     |" -ForegroundColor White
-    Write-Host " |  [3] Excluir Cadastro      (Remover um registro especifico)          |" -ForegroundColor White
-    Write-Host " |  [0] Sair                                                            |" -ForegroundColor Gray
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "[1]" -NoNewline -ForegroundColor Green
+    Write-Host " Iniciar Novo Cadastro (Inventariar este computador)             |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "[2]" -NoNewline -ForegroundColor Yellow
+    Write-Host " Verificar Cadastros   (Listar registros salvos na planilha)     |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "[3]" -NoNewline -ForegroundColor Magenta
+    Write-Host " Excluir Cadastro      (Remover um registro especifico)          |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "[0]" -NoNewline -ForegroundColor Red
+    Write-Host " Sair                                                            |" -ForegroundColor Gray
     Write-Host " |                                                                      |" -ForegroundColor Cyan
     Write-Host " +======================================================================+" -ForegroundColor Cyan
     Write-Host ""
     
-    $opcao = Read-Host " Escolha uma opcao [1]"
+    Write-Host " Digite o numero da opcao desejada " -NoNewline -ForegroundColor Cyan
+    $opcao = Read-Host "[1]"
     if ([string]::IsNullOrWhiteSpace($opcao)) { $opcao = "1" }
     
     switch ($opcao.Trim()) {
@@ -133,34 +142,43 @@ while ($executando) {
                 if ($listaSetores -notcontains $s) { $listaSetores += $s }
             }
             
-            # Perguntas
+            # ----------------- [1/5] EMPRESA -----------------
             Write-Host " [1/5] IDENTIFICACAO DA EMPRESA" -ForegroundColor Yellow
-            $empresaInput = Read-Host "   Empresa [Pressione ENTER para 'InnovTech']"
+            Write-Host "   Pressione ENTER para manter " -NoNewline -ForegroundColor Gray
+            Write-Host "'InnovTech'" -ForegroundColor Green
+            $empresaInput = Read-Host "   Empresa"
             $empresa = if ([string]::IsNullOrWhiteSpace($empresaInput)) { "InnovTech" } else { $empresaInput.Trim() }
             
+            # ----------------- [2/5] USUARIO -----------------
             Write-Host "`n [2/5] DADOS DO USUARIO / RESPONSAVEL" -ForegroundColor Yellow
             $usuario = ""
             while ([string]::IsNullOrWhiteSpace($usuario)) {
-                $usuario = Read-Host "   Nome do Usuario / Colaborador"
+                $usuario = Read-Host "   Nome Completo do Colaborador"
                 if ([string]::IsNullOrWhiteSpace($usuario)) {
                     Write-Host "   (!) Por favor, digite o nome do usuario." -ForegroundColor Red
                 }
             }
             
+            # ----------------- [3/5] FUNCAO -----------------
             Write-Host "`n [3/5] FUNCAO / CARGO" -ForegroundColor Yellow
             $funcao = ""
             while ([string]::IsNullOrWhiteSpace($funcao)) {
-                $funcao = Read-Host "   Funcao / Cargo"
+                $funcao = Read-Host "   Cargo / Funcao (Ex: Operador, Analista, Gerente)"
                 if ([string]::IsNullOrWhiteSpace($funcao)) {
                     Write-Host "   (!) Por favor, digite a funcao." -ForegroundColor Red
                 }
             }
             
+            # ----------------- [4/5] SETOR -----------------
             Write-Host "`n [4/5] SETOR / DEPARTAMENTO" -ForegroundColor Yellow
-            Write-Host "   Setores encontrados / sugeridos:" -ForegroundColor Cyan
+            Write-Host "   Setores sugeridos:" -ForegroundColor Cyan
             for ($i = 0; $i -lt $listaSetores.Count; $i++) {
-                $marcador = if ($setoresHistorico -contains $listaSetores[$i]) { "(*Ja Cadastrado*)" } else { "" }
-                Write-Host ("     [{0}] {1} {2}" -f ($i + 1), $listaSetores[$i], $marcador).TrimEnd() -ForegroundColor Green
+                $ehHistorico = ($setoresHistorico -contains $listaSetores[$i])
+                $corSetor = if ($ehHistorico) { "Green" } else { "White" }
+                $tagHistorico = if ($ehHistorico) { " (*Ja Cadastrado*)" } else { "" }
+                
+                Write-Host "     [$($i + 1)] " -NoNewline -ForegroundColor Cyan
+                Write-Host "$($listaSetores[$i])$tagHistorico" -ForegroundColor $corSetor
             }
             Write-Host "     [0] Digitar um outro setor novo" -ForegroundColor Gray
             
@@ -190,16 +208,20 @@ while ($executando) {
                     $setor = $setorInput.Trim()
                 }
             }
-            Write-Host "   -> Setor definido: $setor" -ForegroundColor Yellow
+            Write-Host "   -> Setor selecionado: " -NoNewline -ForegroundColor Gray
+            Write-Host "$setor" -ForegroundColor Green
             
+            # ----------------- [5/5] PATRIMONIO -----------------
             Write-Host "`n [5/5] NUMERO DE PATRIMONIO" -ForegroundColor Yellow
-            $patrimonioInput = Read-Host "   Patrimonio [Pressione ENTER para '$patrimonioSugerido']"
+            Write-Host "   Pressione ENTER para aceitar o sugerido: " -NoNewline -ForegroundColor Gray
+            Write-Host "[$patrimonioSugerido]" -ForegroundColor Green
+            $patrimonioInput = Read-Host "   Patrimonio"
             $patrimonio = if ([string]::IsNullOrWhiteSpace($patrimonioInput)) { $patrimonioSugerido } else { $patrimonioInput.Trim() }
             
+            # ----------------- COLETA DE HARDWARE -----------------
             Write-Host ""
-            Write-Host " [*] Coletando especificacoes do equipamento... Aguarde..." -ForegroundColor Green
+            Write-Host " [*] Coletando especificacoes tecnicas do computador... Aguarde..." -ForegroundColor Green
             
-            # Coleta de Hardware
             $dataColeta = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
             $hostname = $env:COMPUTERNAME
             
@@ -243,11 +265,11 @@ while ($executando) {
                 $modelo = $bb.Product.Trim()
             }
             
-            # Resumo
+            # Resumo em formato texto para clipboard
             $divisoria = "=" * 60
-            $resumo = @"
+            $resumoTexto = @"
 $divisoria
-       INNOVCORE TI - INVENTARIO DE HARDWARE ($empresa)
+       INNOVCORE TI - RESUMO DO INVENTARIO ($empresa)
 $divisoria
   - Empresa:            $empresa
   - Patrimonio:         $patrimonio
@@ -263,18 +285,45 @@ $divisoria
   - Data do Registro:   $dataColeta
 $divisoria
 "@
+            # Exibicao em Cores Vivas na Tela
             try { Clear-Host } catch {}
             Exibir-LogoPrincipal
             Write-Host ""
-            Write-Host $resumo -ForegroundColor Cyan
+            Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+            Write-Host " |                 RESUMO DAS ESPECIFICACOES COLETADAS                  |" -ForegroundColor Yellow
+            Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+            Write-Host "   EMPRESA:          " -NoNewline -ForegroundColor Gray
+            Write-Host "$empresa" -ForegroundColor White
+            Write-Host "   PATRIMONIO:       " -NoNewline -ForegroundColor Gray
+            Write-Host "$patrimonio" -ForegroundColor Green
+            Write-Host "   COLABORADOR:      " -NoNewline -ForegroundColor Gray
+            Write-Host "$usuario" -ForegroundColor White
+            Write-Host "   CARGO / FUNCAO:   " -NoNewline -ForegroundColor Gray
+            Write-Host "$funcao" -ForegroundColor White
+            Write-Host "   SETOR:            " -NoNewline -ForegroundColor Gray
+            Write-Host "$setor" -ForegroundColor Green
+            Write-Host "  ----------------------------------------------------------------------" -ForegroundColor DarkGray
+            Write-Host "   FABRICANTE/MARCA: " -NoNewline -ForegroundColor Gray
+            Write-Host "$marca" -ForegroundColor Cyan
+            Write-Host "   MODELO DO PC:     " -NoNewline -ForegroundColor Gray
+            Write-Host "$modelo" -ForegroundColor Cyan
+            Write-Host "   NUMERO DE SERIE:  " -NoNewline -ForegroundColor Gray
+            Write-Host "$numeroSerie" -ForegroundColor Yellow
+            Write-Host "   ANO FABRICACAO:   " -NoNewline -ForegroundColor Gray
+            Write-Host "$anoFabricacao" -ForegroundColor Yellow
+            Write-Host "   NOME DO PC (HOST):" -NoNewline -ForegroundColor Gray
+            Write-Host "$hostname" -ForegroundColor White
+            Write-Host "   DATA DA COLETA:   " -NoNewline -ForegroundColor Gray
+            Write-Host "$dataColeta" -ForegroundColor Gray
+            Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
             
             # Copiar para Clipboard
             $copiado = $false
             try {
-                Set-Clipboard -Value $resumo
+                Set-Clipboard -Value $resumoTexto
                 $copiado = $true
             } catch {
-                try { $resumo | clip.exe; $copiado = $true } catch {}
+                try { $resumoTexto | clip.exe; $copiado = $true } catch {}
             }
             
             Write-Host ""
@@ -300,8 +349,9 @@ $divisoria
             $listaAtualizada = @($registrosAtuais) + $novoItem
             Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaAtualizada
             
-            Write-Host " [OK] Registrado com sucesso na base de dados InnovCore CSV!" -ForegroundColor Green
-            Write-Host "      Arquivo: $caminhoCsv" -ForegroundColor Yellow
+            Write-Host " [OK] Registrado com sucesso na planilha CSV do Pendrive!" -ForegroundColor Green
+            Write-Host "      Arquivo: " -NoNewline -ForegroundColor Gray
+            Write-Host "$caminhoCsv" -ForegroundColor Yellow
             Write-Host ""
             Write-Host " Pressione ENTER para voltar ao menu principal..." -ForegroundColor Gray
             try { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") } catch { Read-Host | Out-Null }
@@ -323,23 +373,40 @@ $divisoria
                 Write-Host "  Nenhum equipamento registrado na base InnovCore ainda." -ForegroundColor Yellow
                 Write-Host "  Utilize a opcao [1] para inventariar o primeiro computador." -ForegroundColor Gray
             } else {
-                Write-Host "  Total de maquinas catalogadas no InnovCore: $($registros.Count)" -ForegroundColor Green
+                Write-Host "  Total de maquinas catalogadas no InnovCore: " -NoNewline -ForegroundColor White
+                Write-Host "$($registros.Count)" -ForegroundColor Green
                 Write-Host ""
                 
                 $indice = 1
                 foreach ($r in $registros) {
-                    Write-Host "  [$indice] PATRIMONIO: $($r.Patrimonio)" -ForegroundColor Yellow
-                    Write-Host "      Colaborador: $($r.Usuario) | Setor: $($r.Setor) | Funcao: $($r.Funcao)" -ForegroundColor White
-                    Write-Host "      Equipamento: $($r.Marca) $($r.Modelo) | Serial: $($r.Numero_Serie) | Ano: $($r.Ano_Fabricacao)" -ForegroundColor Cyan
-                    Write-Host "      Host: $($r.Nome_Computador) | Registrado em: $($r.Data_Registro)" -ForegroundColor Gray
-                    Write-Host "  ----------------------------------------------------------------------" -ForegroundColor DarkGray
+                    Write-Host "  [$indice] " -NoNewline -ForegroundColor Cyan
+                    Write-Host "PATRIMONIO: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Patrimonio)" -ForegroundColor Green
+                    Write-Host "      Colaborador: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Usuario)" -NoNewline -ForegroundColor White
+                    Write-Host " | Setor: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Setor)" -NoNewline -ForegroundColor Green
+                    Write-Host " | Funcao: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Funcao)" -ForegroundColor White
+                    Write-Host "      Equipamento: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Marca) $($r.Modelo)" -NoNewline -ForegroundColor Cyan
+                    Write-Host " | Serial: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Numero_Serie)" -NoNewline -ForegroundColor Yellow
+                    Write-Host " | Ano: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Ano_Fabricacao)" -ForegroundColor Yellow
+                    Write-Host "      Host: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Nome_Computador)" -NoNewline -ForegroundColor DarkGray
+                    Write-Host " | Registrado em: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($r.Data_Registro)" -ForegroundColor DarkGray
+                    Write-Host "  ----------------------------------------------------------------------" -ForegroundColor DarkCyan
                     $indice++
                 }
                 
                 Write-Host ""
                 Write-Host "  [E] Abrir planilha completa no Excel" -ForegroundColor Green
                 Write-Host "  [ENTER] Voltar ao menu principal" -ForegroundColor Gray
-                $acaoVer = Read-Host "  Opcao"
+                Write-Host "  Escolha uma opcao " -NoNewline -ForegroundColor Cyan
+                $acaoVer = Read-Host "[ENTER]"
                 if ($acaoVer.Trim() -match '^(?i)e$') {
                     try { Invoke-Item $caminhoCsv } catch {}
                 }
@@ -372,22 +439,29 @@ $divisoria
             } else {
                 $indice = 1
                 foreach ($r in $registros) {
-                    Write-Host "  [$indice] $($r.Patrimonio) - $($r.Usuario) ($($r.Setor) - $($r.Marca) $($r.Modelo))" -ForegroundColor White
+                    Write-Host "  [$indice] " -NoNewline -ForegroundColor Cyan
+                    Write-Host "$($r.Patrimonio) " -NoNewline -ForegroundColor Green
+                    Write-Host "- $($r.Usuario) " -NoNewline -ForegroundColor White
+                    Write-Host "($($r.Setor) - $($r.Marca) $($r.Modelo))" -ForegroundColor Gray
                     $indice++
                 }
                 Write-Host ""
                 Write-Host "  Digite o NUMERO do registro que deseja EXCLUIR" -ForegroundColor Yellow
                 Write-Host "  (Ou digite 0 para cancelar e voltar ao menu):" -ForegroundColor Gray
-                $respExcluir = Read-Host "  Registro a excluir"
+                Write-Host "  Registro a excluir " -NoNewline -ForegroundColor Cyan
+                $respExcluir = Read-Host "[0]"
                 
                 $numExcluir = 0
                 if ([int]::TryParse($respExcluir.Trim(), [ref]$numExcluir)) {
                     if ($numExcluir -ge 1 -and $numExcluir -le $registros.Count) {
                         $itemRemovido = $registros[$numExcluir - 1]
                         Write-Host ""
-                        Write-Host "  ATENCAO: Deseja realmente excluir o cadastro de:" -ForegroundColor Red
-                        Write-Host "  Patrimonio: $($itemRemovido.Patrimonio) - $($itemRemovido.Usuario) ($($itemRemovido.Setor))" -ForegroundColor Yellow
-                        $confirma = Read-Host "  Confirmar exclusao? (S/N) [N]"
+                        Write-Host "  [ATENCAO] Deseja realmente excluir o cadastro de:" -ForegroundColor Red
+                        Write-Host "    Patrimonio: " -NoNewline -ForegroundColor Gray
+                        Write-Host "$($itemRemovido.Patrimonio)" -NoNewline -ForegroundColor Green
+                        Write-Host " - $($itemRemovido.Usuario) ($($itemRemovido.Setor))" -ForegroundColor Yellow
+                        Write-Host "  Confirmar exclusao? (S/N) " -NoNewline -ForegroundColor Red
+                        $confirma = Read-Host "[N]"
                         
                         if ($confirma.Trim() -match '^(?i)s|sim|y|yes$') {
                             $novaLista = @()
