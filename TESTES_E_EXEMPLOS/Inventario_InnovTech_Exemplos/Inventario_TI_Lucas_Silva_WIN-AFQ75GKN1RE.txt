@@ -1,0 +1,36 @@
+﻿========================================================================
+           INVENTARIO DE EQUIPAMENTO - InnovTech
+========================================================================
+
+[1. DADOS DO COLABORADOR E EMPRESA]
+  - Empresa:             InnovTech
+  - Colaborador:         Lucas Silva
+  - Cargo / Funcao:      Analista de Suporte
+  - Setor:               TI
+  - Patrimonio / Tag:    PAT-12345
+  - Data / Hora Coleta:  31/08/2026 12:03:34
+
+[2. ESPECIFICACOES DO COMPUTADOR]
+  - Nome da Maquina:     WIN-AFQ75GKN1RE
+  - Tipo de Equipamento: Notebook / Laptop
+  - Usuario Windows:     Administrator
+  - Fabricante:          LENOVO
+  - Modelo:              82X5
+  - Placa-Mae:           LENOVO LNVNB161216
+  - NUMERO DE SERIE:     PE0FAQJY
+  - Versao da BIOS:      KSCN40WW
+
+[3. HARDWARE]
+  - Processador (CPU):   AMD Ryzen 3 7320U with Radeon Graphics
+  - Nucleos / Threads:   4 Cores / 8 Threads
+  - Memoria RAM:         4 GB RAM (2 GB 5500MHz H9JCNNNBK3MLYR-N6E + 2 GB 5500MHz H9JCNNNBK3MLYR-N6E)
+  - Discos Fisicos:      [SSD] SAMSUNG MZAL4256HBJD-00BL2 (238 GB)
+  - Espaco em Disco:     C: (205.5 GB livres de 232.9 GB)
+  - Placa de Video (GPU):AMD RadeonT 610M
+
+[4. SISTEMA E REDE]
+  - Sistema Operacional: Microsoft Windows 11 Pro (64 bits) - Build 26200
+  - Endereco IPv4:       192.168.1.173
+  - Endereco MAC:        14:B5:CD:37:18:F1
+  - Placa de Rede:       Realtek RTL8852BE WiFi 6 802.11ax PCIe Adapter
+========================================================================

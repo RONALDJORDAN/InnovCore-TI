@@ -1,32 +1,31 @@
 # ==============================================================================
-# SKYNET TI - SISTEMA DE INVENTARIO OPERACIONAL DE EQUIPAMENTOS
-# Cyberdyne Systems - Modulo de Reconhecimento de Hardware
+# INNOVCORE TI - SISTEMA DE GESTAO DE ATIVOS E INVENTARIO DE HARDWARE
 # Desenvolvido por Jordan | Versao 1.0
-# Compativel com Windows 10 e Windows 11
+# Compativel com Windows 10 e Windows 11 (32 e 64 bits)
 # ==============================================================================
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-try { $Host.UI.RawUI.WindowTitle = "SKYNET TI - Inventario de Equipamentos [v1.0]" } catch {}
+try { $Host.UI.RawUI.WindowTitle = "InnovCore TI - Gestao de Ativos [v1.0]" } catch {}
 
 # Identifica o diretorio onde o script esta rodando (Pendrive)
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
-$caminhoCsv = Join-Path $scriptDir "inventario_skynet.csv"
+$caminhoCsv = Join-Path $scriptDir "inventario_innovcore.csv"
 $cabecalhoCsv = "Data_Registro;Empresa;Patrimonio;Usuario;Funcao;Setor;Marca;Modelo;Numero_Serie;Ano_Fabricacao;Nome_Computador"
 
 $utf8ComBOM = New-Object System.Text.UTF8Encoding($true)
 $utf8SemBOM = New-Object System.Text.UTF8Encoding($false)
 
-# Funcao para exibir o Banner Inicial Estilizado (Skynet / Cyberdyne Systems)
+# Funcao para exibir o Banner Inicial Estilizado do InnovCore TI
 function Exibir-LogoPrincipal {
     Write-Host " +======================================================================+" -ForegroundColor Cyan
-    Write-Host " |  ____  _  ____   ___   _ _____ _____                                 |" -ForegroundColor Red
-    Write-Host " | / ___|| |/ /\ \ / / \ | | ____|_   _|                                |" -ForegroundColor Red
-    Write-Host " | \___ \| ' /  \ V /|  \| |  _|   | |                                  |" -ForegroundColor Red
-    Write-Host " |  ___) | . \   | | | |\  | |___  | |                                  |" -ForegroundColor Red
-    Write-Host " | |____/|_|\_\  |_| |_| \_|_____| |_|                                  |" -ForegroundColor Red
+    Write-Host " |  ___ _   _ _   _  _____     ______ _____ ____  _____   _____ ___     |" -ForegroundColor Yellow
+    Write-Host " | |_ _| \ | | \ | |/ _ \ \   / / ___/ _ \|  _ \| ____| |_   _|_ _|    |" -ForegroundColor Yellow
+    Write-Host " |  | ||  \| |  \| | | | \ \ / / |  | | | | |_) |  _|     | |  | |     |" -ForegroundColor Yellow
+    Write-Host " |  | || |\  | |\  | |_| |\ V /| |__| |_| |  _ <| |___    | |  | |     |" -ForegroundColor Yellow
+    Write-Host " | |___|_| \_|_| \_|\___/  \_/  \____\___/|_| \_\_____|   |_| |___|    |" -ForegroundColor Yellow
     Write-Host " |                                                                      |" -ForegroundColor Cyan
-    Write-Host " |             SKYNET TI - SISTEMA DE INVENTARIO OPERACIONAL            |" -ForegroundColor Yellow
-    Write-Host " |         Desenvolvido por Jordan | Versao 1.0 (Cyberdyne Systems)     |" -ForegroundColor White
+    Write-Host " |             INNOVCORE TI - GESTAO DE ATIVOS E INVENTARIO             |" -ForegroundColor Green
+    Write-Host " |                 Desenvolvido por Jordan | Versao 1.0                 |" -ForegroundColor White
     Write-Host " +======================================================================+" -ForegroundColor Cyan
 }
 
@@ -198,7 +197,7 @@ while ($executando) {
             $patrimonio = if ([string]::IsNullOrWhiteSpace($patrimonioInput)) { $patrimonioSugerido } else { $patrimonioInput.Trim() }
             
             Write-Host ""
-            Write-Host " [*] Varrendo hardware do alvo... [Cyberdyne Scan]" -ForegroundColor Green
+            Write-Host " [*] Coletando especificacoes do equipamento... Aguarde..." -ForegroundColor Green
             
             # Coleta de Hardware
             $dataColeta = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
@@ -248,7 +247,7 @@ while ($executando) {
             $divisoria = "=" * 60
             $resumo = @"
 $divisoria
-       SKYNET TI - INVENTARIO DE HARDWARE ($empresa)
+       INNOVCORE TI - INVENTARIO DE HARDWARE ($empresa)
 $divisoria
   - Empresa:            $empresa
   - Patrimonio:         $patrimonio
@@ -301,7 +300,7 @@ $divisoria
             $listaAtualizada = @($registrosAtuais) + $novoItem
             Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaAtualizada
             
-            Write-Host " [OK] Registrado com sucesso na base de dados Skynet CSV!" -ForegroundColor Green
+            Write-Host " [OK] Registrado com sucesso na base de dados InnovCore CSV!" -ForegroundColor Green
             Write-Host "      Arquivo: $caminhoCsv" -ForegroundColor Yellow
             Write-Host ""
             Write-Host " Pressione ENTER para voltar ao menu principal..." -ForegroundColor Gray
@@ -321,10 +320,10 @@ $divisoria
             $registros = Obter-RegistrosCsv -caminho $caminhoCsv
             
             if ($registros.Count -eq 0) {
-                Write-Host "  Nenhum equipamento registrado na base Skynet ainda." -ForegroundColor Yellow
+                Write-Host "  Nenhum equipamento registrado na base InnovCore ainda." -ForegroundColor Yellow
                 Write-Host "  Utilize a opcao [1] para inventariar o primeiro computador." -ForegroundColor Gray
             } else {
-                Write-Host "  Total de maquinas catalogadas no Skynet: $($registros.Count)" -ForegroundColor Green
+                Write-Host "  Total de maquinas catalogadas no InnovCore: $($registros.Count)" -ForegroundColor Green
                 Write-Host ""
                 
                 $indice = 1
@@ -399,7 +398,7 @@ $divisoria
                             }
                             Salvar-RegistrosCsv -caminho $caminhoCsv -registros $novaLista
                             Write-Host ""
-                            Write-Host "  [OK] Registro eliminado da base de dados com sucesso!" -ForegroundColor Green
+                            Write-Host "  [OK] Registro excluido com sucesso da planilha!" -ForegroundColor Green
                         } else {
                             Write-Host ""
                             Write-Host "  Exclusao cancelada pelo usuario." -ForegroundColor Yellow
@@ -427,7 +426,7 @@ $divisoria
             try { Clear-Host } catch {}
             Exibir-LogoPrincipal
             Write-Host ""
-            Write-Host "  Hasta la vista, baby! Programa encerrado. Bom trabalho, Jordan!" -ForegroundColor Green
+            Write-Host "  Programa encerrado. Bom trabalho, Jordan!" -ForegroundColor Green
             Write-Host ""
             Start-Sleep -Milliseconds 1200
         }

@@ -1,28 +1,32 @@
-# 🤖 SKYNET TI - Sistema de Inventário Operacional de Equipamentos
-> *"Hasta la vista, baby!"* — **Cyberdyne Systems Model TI v1.0**
+# 💼 INNOVCORE TI - Sistema de Gestão de Ativos e Inventário de Hardware
+> Sistema corporativo de inventário e catalogação de equipamentos de TI.
 
-Desenvolvido por **Jordan**
+Desenvolvido por **Jordan** | Versão 1.0
 
 Sistema portátil, rápido e inteligente para inventariar computadores corporativos (Windows 10 e Windows 11) diretamente através de um Pen Drive.
 
 ---
 
-## ⚡ Funcionalidades Principais
+## ⚡ Identidade Visual
 
 ```text
  +======================================================================+
- |  ____  _  ____   ___   _ _____ _____                                 |
- | / ___|| |/ /\ \ / / \ | | ____|_   _|                                |
- | \___ \| ' /  \ V /|  \| |  _|   | |                                  |
- |  ___) | . \   | | | |\  | |___  | |                                  |
- | |____/|_|\_\  |_| |_| \_|_____| |_|                                  |
+ |  ___ _   _ _   _  _____     ______ _____ ____  _____   _____ ___     |
+ | |_ _| \ | | \ | |/ _ \ \   / / ___/ _ \|  _ \| ____| |_   _|_ _|    |
+ |  | ||  \| |  \| | | | \ \ / / |  | | | | |_) |  _|     | |  | |     |
+ |  | || |\  | |\  | |_| |\ V /| |__| |_| |  _ <| |___    | |  | |     |
+ | |___|_| \_|_| \_|\___/  \_/  \____\___/|_| \_\_____|   |_| |___|    |
  |                                                                      |
- |             SKYNET TI - SISTEMA DE INVENTARIO OPERACIONAL            |
- |         Desenvolvido por Jordan | Versao 1.0 (Cyberdyne Systems)     |
+ |             INNOVCORE TI - GESTAO DE ATIVOS E INVENTARIO             |
+ |                 Desenvolvido por Jordan | Versao 1.0                 |
  +======================================================================+
 ```
 
-- **🎨 Interface Cyberdyne (Skynet):** Banner ASCII art estilizado, cores e tema inspirado no Exterminador do Futuro.
+---
+
+## 🚀 Funcionalidades Principais
+
+- **🎨 Interface Profissional:** Banner ASCII art estilizado com cores e logotipo corporativo InnovCore TI.
 - **📌 Menu Interativo Completo:**
   - `[1]` Iniciar Novo Cadastro (Inventariar computador)
   - `[2]` Verificar Cadastros (Visualizar todos os equipamentos e abrir planilha no Excel)
@@ -36,7 +40,7 @@ Sistema portátil, rápido e inteligente para inventariar computadores corporati
   - Marca e Modelo (`Win32_ComputerSystem`)
   - Nome do Host e Data/Hora da coleta
 - **📋 Cópia Automática:** Copia o relatório completo imediatamente para a Área de Transferência (`Ctrl + V`).
-- **📊 Planilha CSV Portátil:** Registra e acumula tudo no arquivo `inventario_skynet.csv` no próprio Pen Drive (formatado em UTF-8 com BOM e delimitador `;` para compatibilidade total com o Excel PT-BR).
+- **📊 Planilha CSV Portátil:** Registra e acumula tudo no arquivo `inventario_innovcore.csv` no próprio Pen Drive (formatado em UTF-8 com BOM e delimitador `;` para compatibilidade total com o Excel PT-BR).
 
 ---
 
@@ -46,7 +50,7 @@ Sistema portátil, rápido e inteligente para inventariar computadores corporati
 projetos/
 ├── VERSAO_FINAL_PENDRIVE/          # Pasta com os arquivos prontos para o Pen Drive
 │   ├── executar_inventario.bat    # Executável (2 cliques) que abre o PowerShell
-│   ├── inventario.ps1             # Motor principal do Skynet TI
+│   ├── inventario.ps1             # Motor principal do InnovCore TI
 │   └── COMO_USAR.txt              # Guia rápido de utilização
 ├── executar_inventario.bat
 ├── inventario.ps1
@@ -62,7 +66,7 @@ projetos/
 2. Conecte o Pen Drive no computador que deseja inventariar (Windows 10 ou 11).
 3. Dê **2 cliques** no arquivo `executar_inventario.bat`.
 4. Responda às perguntas interativas no prompt (ou pressione Enter para usar os valores sugeridos).
-5. O sistema salvará as informações na planilha `inventario_skynet.csv` e copiará o resumo para o `Ctrl + V`.
+5. O sistema salvará as informações na planilha `inventario_innovcore.csv` e copiará o resumo para o `Ctrl + V`.
 
 ---
 
@@ -74,4 +78,4 @@ projetos/
 
 ---
 
-*Criado com orgulho por Jordan.*
+*Desenvolvido com excelência por Jordan para InnovTech.*
