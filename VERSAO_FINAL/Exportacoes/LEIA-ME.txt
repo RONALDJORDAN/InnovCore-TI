@@ -1,0 +1,13 @@
+======================================================================
+              INNOVCORE TI - PASTA DE EXPORTACOES
+======================================================================
+
+Nesta pasta serao salvas todas as planilhas e relatorios gerados pelo
+sistema InnovCore TI, incluindo:
+
+1. Planilhas Excel UTF-8 (.CSV com BOM para abrir no Excel do Brasil)
+2. Planilhas Formatadas (.XLS HTML para apresentacoes executivas)
+3. Relatorios Tecnicos em formato de texto (.TXT)
+4. Relatorios de Tablets Android exportados pelo Modulo Mobile
+
+======================================================================

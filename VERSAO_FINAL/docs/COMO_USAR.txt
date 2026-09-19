@@ -1,0 +1,76 @@
+======================================================================
+         INNOVCORE TI v2.0 - GUIA RAPIDO DE USO NO PENDRIVE
+           Desenvolvido por Jordan | Edicao Corporativa
+======================================================================
+
+1. EXECUTAVEL UNIFICADO DA RAIZ:
+   Na raiz do Pen Drive ou pasta VERSAO_FINAL, ha um UNICO arquivo executavel:
+     * [ InnovCore_TI.bat ] -> Abre a Central Completa do InnovCore TI v2.0
+
+   Basta dar 2 cliques em "InnovCore_TI.bat" para ter acesso a tudo!
+
+2. ESTRUTURA ORGANIZADA DE PASTAS:
+   O projeto agora esta organizado em modulos especificos e limpos:
+
+   * InnovCore_TI.bat     -> Unico arquivo executavel na raiz
+   * core\                -> Motores centrais do sistema (inventario.ps1, sincronizar_innovstock.ps1)
+   * dados\desktop\       -> Base de dados CSV de computadores (inventario_innovtech.csv)
+   * dados\mobile\        -> Base de dados CSV de tablets/dispositivos (relatorio_macs_tablets.csv)
+   * mobile\              -> Ferramentas Android ADB e scanner de tablets (capturar_mac_tablet.ps1, platform-tools\)
+   * docs\                -> Documentacoes oficiais e guias de uso (COMO_USAR.txt, README.md)
+   * Exportacoes\         -> Relatorios e planilhas Excel geradas sob demanda
+   * Backups\             -> Cópias de seguranca automaticas antes de alteracoes
+
+3. ARQUITETURA MODULAR DO MENU:
+   Ao abrir "InnovCore_TI.bat", você tem acesso aos módulos:
+
+   [ MODULO 1: COMPUTADORES & DESKTOPS ]
+     * Opcao [1]: Novo Cadastro PC (Automatico via Pen Drive ou Manual)
+     * Opcao [2]: Consultar Computadores (Buscar por Patrimonio, Setor ou Nome)
+     * Opcao [3]: Editar Computador (Corrigir dados, pecas ou setor)
+     * Opcao [4]: Excluir Computador (Com backup automatico de seguranca)
+
+   [ MODULO 2: MOBILE & TABLETS (ANDROID / ADB) ]
+     * Opcao [5]: Central de Gestao Mobile & Tablets
+         -> [1] Auto-Scanner Bancada Plug & Play (USB em lote)
+         -> [2] Cadastrar Tablet TI (Com Patrimonio, Setor e Aluno/Responsavel)
+         -> [3] Listar Dispositivos Tablets Registrados (Tabela com Seriais e MACs)
+         -> [4] Excluir Registro(s) de Tablets (Excluir 1, varios ex: 1,3,4 ou 1-3 com backup)
+         -> [5] Exportar Relatorio Mobile (Excel UTF-8 / CSV)
+     * Opcao [6]: Auto-Scanner Bancada USB (Atalho rapido direto para o scanner)
+
+   [ FERRAMENTAS GERAIS & NUVEM ]
+     * Opcao [7]: Central de Exportacao Geral (Planilhas Excel UTF-8)
+     * Opcao [8]: Dashboard Executivo & Metricas (Demonstrativo e KPIs)
+     * Opcao [9]: Sincronizar InnovStock (Nuvem Firebase Corporativa)
+     * Opcao [0]: Sair do Sistema (ou aperte a tecla ESC em qualquer submenu para voltar)
+
+4. ONDE IR NO DIA A DIA (GUIA DE NAVEGACAO):
+   - PARA INVENTARIAR UM NOTEBOOK OU COMPUTADOR:
+     1. Conecte o Pen Drive no computador do usuario.
+     2. De 2 cliques em "InnovCore_TI.bat".
+     3. Digite [1] e tecle ENTER (Modo Automatico).
+     4. Informe Colaborador, Funcao e Setor -> Concluido!
+
+   - PARA ESCANEAR TABLETS NA BANCADA USB (AUTO-SCANNER):
+     1. De 2 cliques em "InnovCore_TI.bat" e escolha a opcao [6].
+     2. Conecte o tablet no cabo USB com a Depuracao USB ativa.
+     3. O sistema captura o MAC Wi-Fi Real (wlan0) e o Serial em 1 segundo.
+     4. Ao desplugar e plugar o proximo tablet, o processo e continuo!
+
+   - PARA CONSULTAR A LISTA DE TABLETS OU EXCLUIR REGISTROS:
+     1. No menu principal, escolha a opcao [5] (Central Gestao Mobile).
+     2. Escolha [3] para LISTAR todos os tablets registrados em tabela organizada.
+     3. Escolha [4] para EXCLUIR 1 ou mais registros:
+        * Para excluir 1: digite apenas o numero (ex: 2).
+        * Para excluir varios: digite separados por virgula (ex: 1, 3, 4).
+        * Para intervalo: digite com traco (ex: 1-3).
+        * Para todos: digite TODOS.
+        * Um backup automatico da base de tablets e gerado em 'Backups/'.
+
+   - TECLA ESC:
+     Em qualquer pergunta ou submenu, basta pressionar [ESC] para retornar ao menu anterior!
+
+======================================================================
+  InnovCore TI - Sistema Corporativo de Gestao de Ativos de TI
+======================================================================
