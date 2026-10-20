@@ -1,0 +1,96 @@
+﻿Categoria;Tipo_Especifico;Nome_Bem_Produto;Setor_Sugerido
+Tecnologia;Notebook;Notebook Corporativo;TI
+Tecnologia;Netbook M1;Netbook M1;TI
+Tecnologia;Netbook M2;Netbook M2;TI
+Tecnologia;Notebook do Pedagogico;Notebook Pedagogico;Pedagogico
+Tecnologia;Tablet;Tablet;TI
+Tecnologia;Tablet Positivo 10 polegadas;Tablet Positivo 10 polegadas;TI
+Tecnologia;Tablet grande com capa e teclado;Tablet Grande com Capa e Teclado;TI
+Tecnologia;Tablet grande sem capa;Tablet Grande sem Capa;TI
+Tecnologia;Chromebook Lenovo;Chromebook Lenovo;TI
+Tecnologia;Chromebook Multilaser;Chromebook Multilaser;TI
+Tecnologia;Chromebook Samsung;Chromebook Samsung;TI
+Tecnologia;Chromebook Acer;Chromebook Acer;TI
+Tecnologia;Chromebook Total;Chromebook Total;TI
+Tecnologia;Impressora;Impressora;TI
+Tecnologia;Impressora HP;Impressora HP;TI
+Tecnologia;Scanner;Scanner;TI
+Tecnologia;Monitor de computador;Monitor de Computador;TI
+Tecnologia;Monitores LG 24 polegadas;Monitor LG 24 polegadas;TI
+Tecnologia;Televisao;Televisao;Convivencia
+Tecnologia;Suporte de TV;Suporte de Televisao;Convivencia
+Tecnologia;Teclado;Teclado;TI
+Tecnologia;Mouse;Mouse;TI
+Tecnologia;Mouses sem fio;Mouse sem Fio;TI
+Tecnologia;Telefone;Telefone Celular;TI
+Tecnologia;Suporte de telefone;Suporte de Telefone;TI
+Tecnologia;Adaptador de telefone;Adaptador de Telefone;TI
+Tecnologia;Adaptador de energia (cabeca);Adaptador de Energia;TI
+Tecnologia;Carregador;Carregador;TI
+Tecnologia;Carregador Lenovo;Carregador Lenovo;TI
+Tecnologia;Carregadores para tablets;Carregador para Tablets;TI
+Tecnologia;Carregadores Daren;Carregador Daren;TI
+Tecnologia;Carregadores Samsung;Carregador Samsung;TI
+Tecnologia;Carregadores Multilaser;Carregador Multilaser;TI
+Tecnologia;Carregadores na caixa;Carregador (original na caixa);TI
+Tecnologia;Cabos de carregamento;Cabo de Carregamento;TI
+Tecnologia;Cabos de fonte;Cabo de Fonte;TI
+Tecnologia;Cabos organizadores tipo C;Cabos Organizadores Tipo C;TI
+Tecnologia;Regua de carregamento;Regua de Carregamento;TI
+Tecnologia;Regua de carregamento (na mesa);Regua de Carregamento de Mesa;Pedagogico
+Tecnologia;Regua de carregamento - oficina;Regua de Carregamento da Oficina;Manutencao
+Tecnologia;Gabinetes de recarga;Gabinete de Recarga;TI
+Tecnologia;Mesa de carregamento;Mesa de Carregamento;TI
+Tecnologia;Extensao;Extensao Eletrica;TI
+Tecnologia;Radio de comunicacao;Radio de Comunicacao;Operacoes e Logistica
+Tecnologia;Receptor Starlink;Receptor Starlink;TI
+Tecnologia;Cabos Starlink;Cabos Starlink;TI
+Tecnologia;Cabecas Starlink;Cabecas Starlink;TI
+Tecnologia;Camera;Camera;TI
+Tecnologia;Aparelhos diversos;Aparelho Diverso;TI
+Moveis e Escritorio;Cadeira;Cadeira Corporativa;Operacoes e Logistica
+Moveis e Escritorio;Banco;Banco de Espera;Convivencia
+Moveis e Escritorio;Mesa;Mesa de Trabalho;Operacoes e Logistica
+Moveis e Escritorio;Armario;Armario;Operacoes e Logistica
+Moveis e Escritorio;Estante;Estante;Operacoes e Logistica
+Moveis e Escritorio;Bancada em L;Bancada em L;Manutencao
+Moveis e Escritorio;Bancada com gavetas;Bancada com Gavetas;Manutencao
+Moveis e Escritorio;Nicho de impressora;Nicho de Impressora;TI
+Moveis e Escritorio;Porta-canetas;Porta-canetas;Operacoes e Logistica
+Moveis e Escritorio;Lixeira;Lixeira;Servicos Gerais e Limpeza
+Moveis e Escritorio;Sofa;Sofa;Convivencia
+Moveis e Escritorio;Poltrona;Poltrona;Convivencia
+Moveis e Escritorio;Frigobar;Frigobar;Convivencia
+Moveis e Escritorio;Mesinha;Mesinha;Convivencia
+Moveis e Escritorio;Quadro;Quadro;Pedagogico
+Moveis e Escritorio;Utensilios de armazenamento (potes);Utensilios de Armazenamento;Servicos Gerais e Limpeza
+Eletrodomesticos e Cozinha;Ar condicionado;Ar Condicionado;Operacoes e Logistica
+Eletrodomesticos e Cozinha;Aquecedor de agua;Aquecedor de Agua;Servicos Gerais e Limpeza
+Eletrodomesticos e Cozinha;Bebedouro;Bebedouro;Servicos Gerais e Limpeza
+Eletrodomesticos e Cozinha;Cafeteira grande;Cafeteira;Convivencia
+Eletrodomesticos e Cozinha;Sanduicheira;Sanduicheira;Convivencia
+Eletrodomesticos e Cozinha;Filtro de agua;Filtro de Agua;Servicos Gerais e Limpeza
+Manutencao e Ferramentas;Equipamento de manutencao;Equipamento de Manutencao;Manutencao
+Suprimentos de Escritorio;Agenda;Agenda;Administrativo
+Suprimentos de Escritorio;Pilotos;Canetas Marca-Piloto;Administrativo
+Suprimentos de Escritorio;Caixa de grampos;Caixa de Grampos;Administrativo
+Suprimentos de Escritorio;Caixa de notas;Caixa de Notas;Administrativo
+Suprimentos de Escritorio;Caixa de lapis de cor;Caixa de Lapis de Cor;Pedagogico
+Suprimentos de Escritorio;Caixa de marcador permanente;Caixa de Marcador Permanente;Pedagogico
+Suprimentos de Escritorio;Caixa de toner lacrada;Caixa de Toner Lacrada;TI
+Suprimentos de Escritorio;Caixa de cor para impressora;Caixa de Cor para Impressora;Pedagogico
+Suprimentos de Escritorio;Colas;Colas;Administrativo
+Suprimentos de Escritorio;Borracha;Borracha;Administrativo
+Suprimentos de Escritorio;Estilete;Estilete;Administrativo
+Suprimentos de Escritorio;Caixa de laminas;Caixa de Laminas;Manutencao
+Suprimentos de Escritorio;Tesoura;Tesoura;Administrativo
+Suprimentos de Escritorio;Grampeador;Grampeador;Administrativo
+Suprimentos de Escritorio;Grampeadores grandes;Grampeador Grande;Administrativo
+Suprimentos de Escritorio;Carimbo;Carimbo;Administrativo
+Suprimentos de Escritorio;Perfurador;Perfurador;Administrativo
+Logistica e Transporte;Bolsa;Bolsa de Transporte;Operacoes e Logistica
+Logistica e Transporte;Caixa de transporte;Caixa de Transporte;Operacoes e Logistica
+Logistica e Transporte;Caixa plastica;Caixa Plastica;Operacoes e Logistica
+Lazer e Convivencia;Equipamento de lazer;Equipamento de Lazer;Convivencia
+Outros;Aparelhos diversos;Aparelho Diverso;TI
+Outros;Outros;Outro Bem;Almoxarifado

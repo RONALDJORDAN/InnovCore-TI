@@ -14,8 +14,10 @@
 
    * InnovCore_TI.bat     -> Unico arquivo executavel na raiz
    * core\                -> Motores centrais do sistema (inventario.ps1, sincronizar_innovstock.ps1)
+   * core\catalogos\      -> Catalogo editavel de tipos de bens (catalogo_ativos.csv)
    * dados\desktop\       -> Base de dados CSV de computadores (inventario_innovtech.csv)
    * dados\mobile\        -> Base de dados CSV de tablets/dispositivos (relatorio_macs_tablets.csv)
+   * dados\ativos\        -> Base de dados CSV de bens patrimoniais (inventario_ativos_innovcore.csv)
    * mobile\              -> Ferramentas Android ADB e scanner de tablets (capturar_mac_tablet.ps1, platform-tools\)
    * docs\                -> Documentacoes oficiais e guias de uso (COMO_USAR.txt, README.md)
    * Exportacoes\         -> Relatorios e planilhas Excel geradas sob demanda
@@ -24,52 +26,128 @@
 3. ARQUITETURA MODULAR DO MENU:
    Ao abrir "InnovCore_TI.bat", você tem acesso aos módulos:
 
-   [ MODULO 1: COMPUTADORES & DESKTOPS ]
-     * Opcao [1]: Novo Cadastro PC (Automatico via Pen Drive ou Manual)
-     * Opcao [2]: Consultar Computadores (Buscar por Patrimonio, Setor ou Nome)
-     * Opcao [3]: Editar Computador (Corrigir dados, pecas ou setor)
-     * Opcao [4]: Excluir Computador (Com backup automatico de seguranca)
+   [ MODULO 1: REGISTRO DE ATIVOS E PATRIMONIO (BENS GERAIS) ]
+      * Opcao [1]: Central de Ativos
+          -> [1] Novo Cadastro de Bem (modo Rapido ou Completo, em lote)
+          -> [2] Importar Planilha (Cadastrar muitos bens de uma vez via CSV)
+          -> [3] Consultar Ativos (listar, filtrar por setor/categoria/situacao, ficha completa)
+          -> [4] Editar Ativo (situacao, setor, responsavel, localizacao, observacoes, nome)
+          -> [5] Excluir Ativo (com backup automatico de seguranca)
+          -> [6] Termo de Responsabilidade (gera termo .txt e .html pronto para imprimir)
+          -> [7] Exportar Ativos (CSV Excel UTF-8 / XLS Formatado / TXT)
+          -> [8] Dashboard do Patrimonio (totais por setor, categoria, situacao e valor)
+          -> [9] Cadastro Mestre de Colaboradores e Fornecedores (COL-0001 / FOR-0001)
+          -> [10] Catalogo e Arquivos (abrir planilhas e pastas direto no Excel)
+      * Atalhos: digite "a", "ativo", "patrimonio" ou "bens" no menu principal
 
-   [ MODULO 2: MOBILE & TABLETS (ANDROID / ADB) ]
-     * Opcao [5]: Central de Gestao Mobile & Tablets
-         -> [1] Auto-Scanner Bancada Plug & Play (USB em lote)
-         -> [2] Cadastrar Tablet TI (Com Patrimonio, Setor e Aluno/Responsavel)
-         -> [3] Listar Dispositivos Tablets Registrados (Tabela com Seriais e MACs)
-         -> [4] Excluir Registro(s) de Tablets (Excluir 1, varios ex: 1,3,4 ou 1-3 com backup)
-         -> [5] Exportar Relatorio Mobile (Excel UTF-8 / CSV)
-     * Opcao [6]: Auto-Scanner Bancada USB (Atalho rapido direto para o scanner)
+   DICA DE USO RAPIDO (para a equipe):
+      - Em qualquer lista (tipo, setor, responsavel) DIGITE um texto para FILTRAR
+        em vez de rolar a lista. Ex.: digite "ar con" e aparece "Ar condicionado".
+      - Use o modo [2] CADASTRO RAPIDO para lancar varios bens iguais (ex: 50 cadeiras):
+        ele herda setor, responsavel, fornecedor e situacao do item anterior.
+      - Ao terminar um item, o sistema pergunta "Cadastrar OUTRO bem agora? (S/N)".
+      - Para manyar dozens de bens, preencha o modelo de planilha e use a opcao [2].
+
+   [ MODULO 2: COMPUTADORES & DESKTOPS ]
+      * Opcao [2]: Novo Cadastro PC (Automatico via Pen Drive ou Manual)
+      * Opcao [3]: Consultar Computadores (Buscar por Patrimonio, Setor ou Nome)
+      * Opcao [4]: Editar Computador (Corrigir dados, pecas ou setor)
+      * Opcao [5]: Excluir Computador (Com backup automatico de seguranca)
+
+   [ MODULO 3: MOBILE & TABLETS (ANDROID / ADB) ]
+      * Opcao [6]: Central de Gestao Mobile & Tablets
+          -> [1] Auto-Scanner Bancada Plug & Play (USB em lote)
+          -> [2] Cadastrar Tablet TI (Com Patrimonio, Setor e Aluno/Responsavel)
+          -> [3] Listar Dispositivos Tablets Registrados (Tabela com Seriais e MACs)
+          -> [4] Excluir Registro(s) de Tablets (Excluir 1, varios ex: 1,3,4 ou 1-3 com backup)
+          -> [5] Exportar Relatorio Mobile (Excel UTF-8 / CSV)
+      * Opcao [7]: Auto-Scanner Bancada USB (Atalho rapido direto para o scanner)
 
    [ FERRAMENTAS GERAIS & NUVEM ]
-     * Opcao [7]: Central de Exportacao Geral (Planilhas Excel UTF-8)
-     * Opcao [8]: Dashboard Executivo & Metricas (Demonstrativo e KPIs)
-     * Opcao [9]: Sincronizar InnovStock (Nuvem Firebase Corporativa)
-     * Opcao [0]: Sair do Sistema (ou aperte a tecla ESC em qualquer submenu para voltar)
+      * Opcao [8]: Central de Exportacao Geral (Planilhas Excel UTF-8)
+      * Opcao [9]: Dashboard Executivo & Metricas (Demonstrativo e KPIs)
+      * Opcao [10]: Sincronizar InnovStock (Nuvem Firebase Corporativa)
+      * Opcao [0]: Sair do Sistema (ou aperte a tecla ESC em qualquer submenu para voltar)
 
 4. ONDE IR NO DIA A DIA (GUIA DE NAVEGACAO):
    - PARA INVENTARIAR UM NOTEBOOK OU COMPUTADOR:
-     1. Conecte o Pen Drive no computador do usuario.
-     2. De 2 cliques em "InnovCore_TI.bat".
-     3. Digite [1] e tecle ENTER (Modo Automatico).
-     4. Informe Colaborador, Funcao e Setor -> Concluido!
+      1. Conecte o Pen Drive no computador do usuario.
+      2. De 2 cliques em "InnovCore_TI.bat".
+      3. Digite [2] e tecle ENTER (Modo Automatico).
+      4. Informe Colaborador, Funcao e Setor -> Concluido!
+
+   - PARA CADASTRAR UM BEM PATRIMONIAL (CADEIRA, AR CONDICIONADO, IMPRESSORA...):
+      1. De 2 cliques em "InnovCore_TI.bat" e escolha a opcao [1].
+      2. Escolha a opcao [1] (Novo Cadastro de Bem).
+      3. Escolha [2] CADASTRO RAPIDO (ou [1] COMPLETO para um bem especifico).
+      4. Escolha a Categoria (ex: Moveis e Escritorio) e o Tipo (ex: Cadeira).
+         DICA: digite texto para filtrar a lista, em vez de rolar os itens.
+      5. Preencha os campos da ficha patrimonial (Nome do Bem, Tombamento, Setor,
+         Responsavel, Situacao, Data e Valor da Compra, Localizacao, Observacoes).
+      6. O sistema gera o codigo de tombamento (PAT-xxxxx), copia a ficha para a
+         Area de Transferencia e grava em 'dados\ativos\inventario_ativos_innovcore.csv'.
+
+   - PARA LANCAR MUITOS BENS DE UMA VEZ (PLANILHA):
+      1. No Módulo 1, escolha a opcao [10] > [5] para abrir o modelo de planilha.
+      2. Preencha uma linha por bem (Nome do Bem e Categoria sao o essencial).
+      3. Salve e volte ao sistema; escolha a opcao [2] (Importar Planilha).
+      4. Aponte o arquivo e confirme. O sistema mostra a PREVIA (o que entra e o que
+         e ignorado, com o motivo) antes de gravar na base.
+
+   - PARA GERAR O TERMO DE RESPONSABILIDADE DE UM BEM:
+      1. No Módulo 1, escolha a opcao [6].
+      2. Informe o numero do bem ou o codigo de tombamento.
+      3. O termo e gerado em .txt e .html (formatado, pronto para imprimir) e salvo
+         em 'dados\ativos\termos\'. O historico fica em 'termos_emitidos.csv'.
+
+   - PARA EXCLUIR UM BEM:
+      1. No Módulo 1, escolha a opcao [5].
+      2. Informe o numero do bem ou o codigo de tombamento.
+      3. Digite EXCLUIR para confirmar. Um backup automatico e gerado em 'Backups\'.
+
+   - PARA INCLUIR UM TIPO DE BEM NO CATALOGO:
+      1. No Módulo 1, escolha a opcao [10] > [1] (Catalogo de Tipos).
+      2. No Excel, adicione uma linha: Categoria;Tipo;Nome do Bem;Setor sugerido
+      3. Salve e feche o Excel - o novo tipo ja aparece no cadastro.
+
+   - PARA CADASTRAR COLABORADORES E FORNECEDORES:
+      1. No Módulo 1, escolha a opcao [9].
+      2. Use [2] para cadastrar colaborador (codigo COL-0001 automatico) e
+         [6] para cadastrar fornecedor (codigo FOR-0001 automatico).
+      3. Os nomes passam a aparecer automaticamente nos seletores do cadastro de bens.
+
+   - PARA EXPORTAR O PATRIMONIO:
+      1. No Módulo 1, escolha a opcao [7] (Exportar Ativos).
+      2. Escolha o formato: CSV Excel UTF-8, XLS Formatado ou Relatorio TXT.
+      3. A planilha e gerada em 'Exportacoes\' com filtro por setor, categoria ou situacao.
 
    - PARA ESCANEAR TABLETS NA BANCADA USB (AUTO-SCANNER):
-     1. De 2 cliques em "InnovCore_TI.bat" e escolha a opcao [6].
-     2. Conecte o tablet no cabo USB com a Depuracao USB ativa.
-     3. O sistema captura o MAC Wi-Fi Real (wlan0) e o Serial em 1 segundo.
-     4. Ao desplugar e plugar o proximo tablet, o processo e continuo!
+      1. De 2 cliques em "InnovCore_TI.bat" e escolha a opcao [7].
+      2. Conecte o tablet no cabo USB com a Depuracao USB ativa.
+      3. O sistema captura o MAC Wi-Fi Real (wlan0) e o Serial em 1 segundo.
+      4. Ao desplugar e plugar o proximo tablet, o processo e continuo!
 
    - PARA CONSULTAR A LISTA DE TABLETS OU EXCLUIR REGISTROS:
-     1. No menu principal, escolha a opcao [5] (Central Gestao Mobile).
-     2. Escolha [3] para LISTAR todos os tablets registrados em tabela organizada.
-     3. Escolha [4] para EXCLUIR 1 ou mais registros:
-        * Para excluir 1: digite apenas o numero (ex: 2).
-        * Para excluir varios: digite separados por virgula (ex: 1, 3, 4).
-        * Para intervalo: digite com traco (ex: 1-3).
-        * Para todos: digite TODOS.
-        * Um backup automatico da base de tablets e gerado em 'Backups/'.
+      1. No menu principal, escolha a opcao [6] (Central Gestao Mobile).
+      2. Escolha [3] para LISTAR todos os tablets registrados em tabela organizada.
+      3. Escolha [4] para EXCLUIR 1 ou mais registros:
+         * Para excluir 1: digite apenas o numero (ex: 2).
+         * Para excluir varios: digite separados por virgula (ex: 1, 3, 4).
+         * Para intervalo: digite com traco (ex: 1-3).
+         * Para todos: digite TODOS.
+         * Um backup automatico da base de tablets e gerado em 'Backups/'.
 
    - TECLA ESC:
-     Em qualquer pergunta ou submenu, basta pressionar [ESC] para retornar ao menu anterior!
+      Em qualquer pergunta ou submenu, basta pressionar [ESC] para retornar ao menu anterior!
+      Durante o preenchimento de um cadastro, o ESC pergunta se voce deseja CANCELAR a
+      operacao atual. Confirmando, nada e gravado e o sistema volta ao menu com seguranca.
+
+   - A INTERFACE SE ADAPTA AO SEU TERMINAL:
+      * As caixas acompanham a largura da janela (de 73 a 120 colunas) e ficam centralizadas.
+      * Em janelas baixas (menos de 28 linhas), o banner vira compacto para o menu caber.
+      * As tabelas ganham ou perdem colunas conforme o espaco disponivel.
+      * Cada tela limpa a area visivel E o historico de rolagem: o terminal mostra apenas
+        a interface atual, sem restos das telas anteriores.
 
 ======================================================================
   InnovCore TI - Sistema Corporativo de Gestao de Ativos de TI

@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # INNOVCORE TI - SISTEMA DE GESTAO DE ATIVOS E INVENTARIO DE HARDWARE
 # Desenvolvido por Jordan | Versao 2.0 (Edicao Corporativa Avancada)
 # Compativel com Windows 10 e Windows 11 (32 e 64 bits) | PowerShell 5.1 & 7+
@@ -49,19 +49,69 @@ $caminhoCsv = if (Test-Path $caminhoCsvDesktop) {
 $pastaExport = Join-Path $scriptRootDir "Exportacoes"
 $pastaBackup = Join-Path $scriptRootDir "Backups"
 
+# ------------------------------------------------------------------------------
+# MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO (BENS GERAIS: MOVEIS, EQUIPAMENTOS, INSUMOS)
+# ------------------------------------------------------------------------------
+# Base de dados EXCLUSIVA dos bens patrimoniais (separada do inventario TI de desktop)
+$pastaDadosAtivos = Join-Path $scriptRootDir "dados\ativos"
+$caminhoCsvAtivos = Join-Path $pastaDadosAtivos "inventario_ativos_innovcore.csv"
+
+# Catalogo EDITAVEL de tipos de bens (Categoria;Tipo;Nome do Bem;Setor sugerido)
+# O usuario pode editar este arquivo direto no Excel para incluir novos tipos.
+$caminhoCatalogoAtivos = Join-Path $scriptRootDir "core\catalogos\catalogo_ativos.csv"
+if (!(Test-Path $caminhoCatalogoAtivos)) {
+    $caminhoCatalogoAtivosAlt = Join-Path $scriptRootDir "catalogos\catalogo_ativos.csv"
+    if (Test-Path $caminhoCatalogoAtivosAlt) {
+        $caminhoCatalogoAtivos = $caminhoCatalogoAtivosAlt
+    }
+}
+
+# Cadastros MESTRES (editaveis no Excel e pelo proprio sistema)
+$caminhoCatalogoColaboradores = Join-Path $scriptRootDir "core\catalogos\catalogo_colaboradores.csv"
+$caminhoCatalogoFornecedores  = Join-Path $scriptRootDir "core\catalogos\catalogo_fornecedores.csv"
+
+# Termos de responsabilidade e modelo de importacao em lote
+$pastaTermos             = Join-Path $pastaDadosAtivos "termos"
+$caminhoTermosEmitidos   = Join-Path $pastaDadosAtivos "termos_emitidos.csv"
+$caminhoModeloImportacao = Join-Path $pastaDadosAtivos "modelo_importacao_ativos.csv"
+
+# Setores oficiais para alocacao de bens (patrimonio)
+$script:setoresAtivosPadrao = @(
+    "Operacoes e Logistica", "Pedagogico", "TI", "Administrativo", "Financeiro",
+    "Comercial", "Marketing", "Recursos Humanos", "Motoristas",
+    "Servicos Gerais e Limpeza", "Manutencao", "Diretoria", "Almoxarifado",
+    "Recepcao", "Convivencia"
+)
+
+# Empresas / Unidades cadastraveis no modulo de ativos
+$script:empresasAtivosPadrao = @("InnovEdu", "InnovTech")
+
+# Situacoes patrimoniais padrao
+$script:situacoesAtivosPadrao = @(
+    "Ativo/Operacional", "Em Manutencao", "Em Estoque",
+    "Baixado/Inativo", "Emprestado/Cedido"
+)
+
 # Definicao de Cabecalho Completo Oficial InnovCore TI (Compativel com Excel PT-BR)
+# Estrutura PATRIMONIAL COMPLETA para Gestao de Ativos Operacionais
 $cabecalhoOficial = @(
-    "Data_Registro",
-    "Empresa",
-    "Patrimonio",
-    "Usuario",
-    "Funcao",
-    "Setor",
-    "Tipo_Equipamento",
-    "Marca",
-    "Modelo",
-    "Numero_Serie",
-    "Ano_Fabricacao",
+    "Data_Registro",              # Data/hora do registro no sistema
+    "Empresa_Unidade",            # Empresa/Unidade (ex: InnovEdu, InnovTech)
+    "Codigo_Tombamento",          # PAT-XXXXX (Imutavel, sequencial global)
+    "Numero_Nota_Fiscal",         # NF-XXXXX (Opcional)
+    "CRM_Serial",                 # Serial/Chassi/RFID/IMEI (Opcional)
+    "Categoria_Bem",              # Categoria principal (Tecnologia, Moveis, Eletrodomesticos, etc.)
+    "Tipo_Especifico",            # Subtipo livre (ex: Cadeira Presidente, Mesa L, Notebook)
+    "Nome_Bem_Produto",           # Nome completo do bem (ex: MacBook Pro M2 Max 16'', Ar Condicionado 12000 BTU)
+    "Setor_Atribuido",            # Setor onde o bem esta alocado
+    "Responsavel_Colaborador",    # Nome do responsavel/custodiante
+    "Fornecedor",                 # Fornecedor da aquisicao (Opcional)
+    "Situacao",                   # Ativo/Operacional, Em Manutencao, Em Estoque, Baixado/Inativo, Emprestado/Cedido
+    "Data_Compra",                # DD/MM/AAAA (Obrigatorio para patrimônio)
+    "Valor_Compra",               # R$ 0,00 (Opcional)
+    "Localizacao_Fisica_Posto",   # Ex: Sala TI - Posto 03, Almoxarifado, Veiculo Placa ABC1234
+    "Observacoes_Adicionais",     # Livre: garantia, condicoes especiais, etc.
+    # Campos legados TI (mantidos para compatibilidade retroativa)
     "Nome_Computador",
     "Processador",
     "Memoria_RAM",
@@ -69,7 +119,9 @@ $cabecalhoOficial = @(
     "Placa_Video",
     "Sistema_Operacional",
     "IP_Rede",
-    "MAC_Rede"
+    "MAC_Rede",
+    "Bateria",
+    "Android_Versao"
 )
 $cabecalhoCsvString = $cabecalhoOficial -join ';'
 
@@ -77,9 +129,258 @@ $utf8ComBOM = New-Object System.Text.UTF8Encoding($true)
 $utf8SemBOM = New-Object System.Text.UTF8Encoding($false)
 
 # ==============================================================================
-# IDENTIDADE VISUAL E BANNER CORPORATIVO
+# MOTOR DE LAYOUT ADAPTATIVO (RESOLUCAO REAL DO TERMINAL)
+# ==============================================================================
+# O sistema se ajusta ao terminal em que for aberto: detecta largura e altura,
+# centraliza as caixas, expande as tabelas e compacta o banner quando o
+# terminal e baixo (ex.: 80x24).
+$script:terminalLargura = 100
+$script:terminalAltura  = 30
+$script:larguraCaixa    = 73
+$script:recuoTela       = ""
+$script:colunaLinha     = 0
+
+function Atualizar-TamanhoTerminal {
+    $largura = 0
+    $altura = 0
+    try { if ($env:COLUMNS) { [void][int]::TryParse($env:COLUMNS, [ref]$largura) } } catch {}
+    try { if ($env:LINES) { [void][int]::TryParse($env:LINES, [ref]$altura) } } catch {}
+    if ($largura -le 0) { try { $largura = $Host.UI.RawUI.WindowSize.Width } catch {} }
+    if ($altura -le 0) { try { $altura = $Host.UI.RawUI.WindowSize.Height } catch {} }
+    if ($largura -le 0) { $largura = 100 }
+    if ($altura -le 0) { $altura = 30 }
+    if ($largura -lt 40) { $largura = 40 }
+    if ($largura -gt 220) { $largura = 220 }
+    if ($altura -lt 8) { $altura = 8 }
+
+    $script:terminalLargura = $largura
+    $script:terminalAltura = $altura
+
+    # Largura da caixa: ocupa o terminal com folga, sem nunca ficar menor que o padrao
+    $caixa = $largura - 2
+    if ($caixa -lt 73) { $caixa = 73 }
+    if ($caixa -gt 120) { $caixa = 120 }
+    $script:larguraCaixa = $caixa
+
+    # Centraliza horizontalmente quando sobra espaco
+    $sobra = $largura - $caixa
+    if ($sobra -ge 4) { $script:recuoTela = " " * [int]($sobra / 2) } else { $script:recuoTela = "" }
+}
+
+# Quantos itens cabem em uma listagem sem estourar a altura do terminal
+function Get-LimiteListagem {
+    $limite = $script:terminalAltura - 14
+    if ($limite -lt 8) { $limite = 8 }
+    if ($limite -gt 500) { $limite = 500 }
+    return $limite
+}
+
+# ------------------------------------------------------------------------------
+# Write-Host ADAPTATIVO
+# Centraliza a saida, redesenha os separadores de caixa e alinha a borda direita
+# de todas as linhas "|" conforme a largura detectada do terminal.
+# ------------------------------------------------------------------------------
+function Write-Host {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline = $true)]
+        [object]$Object,
+        [switch]$NoNewline,
+        [string]$ForegroundColor
+    )
+    process {
+        if ($null -eq $Object) {
+            $texto = ""
+        } elseif ($Object -is [array]) {
+            $texto = ($Object -join " ")
+        } else {
+            $texto = [string]$Object
+        }
+
+        $partes = $texto -split "`r?`n"
+        $saida = New-Object System.Collections.Generic.List[string]
+
+        for ($i = 0; $i -lt $partes.Count; $i++) {
+            $corpo = $partes[$i]
+            $prefixo = ""
+            if ($i -eq 0) {
+                if ($script:colunaLinha -eq 0 -and $script:recuoTela -ne "") {
+                    $prefixo = $script:recuoTela
+                    $script:colunaLinha = $script:recuoTela.Length
+                }
+            } else {
+                $script:colunaLinha = 0
+                if ($script:recuoTela -ne "") {
+                    $prefixo = $script:recuoTela
+                    $script:colunaLinha = $script:recuoTela.Length
+                }
+            }
+
+            # Separadores de caixa (+=====+ / +-----+) sao redesenhados na largura atual
+            if ($corpo -match '^\s*\+([=\-])\1+\s*\+$') {
+                $fill = $Matches[1]
+                $corpo = " +" + ($fill * ($script:larguraCaixa - 3)) + "+"
+            }
+
+            # Borda direita das linhas de caixa: preenche ate a largura da caixa
+            # (somente quando o trecho TERMINA em "|", sem espacos depois)
+            if ($corpo.EndsWith("|")) {
+                $usado = $script:colunaLinha + $corpo.Length
+                $faltam = ($script:larguraCaixa - 1) - $usado
+                if ($faltam -gt 0) {
+                    $corpo = $corpo.Substring(0, $corpo.Length - 1) + (" " * $faltam) + "|"
+                }
+            }
+
+            $saida.Add($prefixo + $corpo)
+            $script:colunaLinha += $corpo.Length
+        }
+
+        $final = $saida -join "`n"
+        if ($NoNewline) {
+            if ($ForegroundColor -and $ForegroundColor -ne "") {
+                Microsoft.PowerShell.Utility\Write-Host -Object $final -NoNewline -ForegroundColor $ForegroundColor
+            } else {
+                Microsoft.PowerShell.Utility\Write-Host -Object $final -NoNewline
+            }
+        } else {
+            if ($ForegroundColor -and $ForegroundColor -ne "") {
+                Microsoft.PowerShell.Utility\Write-Host -Object $final -ForegroundColor $ForegroundColor
+            } else {
+                Microsoft.PowerShell.Utility\Write-Host -Object $final
+            }
+            $script:colunaLinha = 0
+        }
+    }
+}
+
+# ------------------------------------------------------------------------------
+# LIMPEZA DE TELA (sem historico)
+# Limpa a area visivel E o buffer de rolagem (scrollback), para que o terminal
+# apresente sempre apenas a interface atual, sem "restos" de telas anteriores.
+# ------------------------------------------------------------------------------
+function Limpar-Console {
+    # 1) Limpa a area visivel (funciona em qualquer console)
+    try {
+        Microsoft.PowerShell.Utility\Clear-Host
+    } catch {
+        # 2) Fallback: sequencia ANSI (Windows Terminal e consoles modernos)
+        try {
+            $esc = [char]27
+            [Console]::Write("$esc[2J$esc[3J$esc[H")
+        } catch {}
+        return
+    }
+
+    # 3) Limpa tambem o historico de rolagem (scrollback) quando o console suporta VT.
+    #    No PowerShell 5.1 o escape de ESC e [char]27 (o "`e" so existe no 6+).
+    try {
+        if ($env:WT_SESSION -or $env:TERM_PROGRAM -or $env:ConEmuANSI -eq "ON") {
+            $esc = [char]27
+            [Console]::Write("$esc[2J$esc[3J$esc[H")
+        }
+    } catch {}
+}
+
+# ------------------------------------------------------------------------------
+# Clear-Host ADAPTATIVO: zera o contador de coluna e limpa a tela sem historico
+# ------------------------------------------------------------------------------
+function Clear-Host {
+    $script:colunaLinha = 0
+    Limpar-Console
+}
+
+# ------------------------------------------------------------------------------
+# Read-Host ADAPTATIVO (TECLA ESC / CANCELAMENTO)
+# Durante o preenchimento de qualquer campo, a tecla ESC pergunta se o usuario
+# deseja cancelar a operacao atual. Confirmando, a operacao e abortada com
+# seguranca (nada e gravado pela metade) e o sistema volta ao menu anterior.
+# ------------------------------------------------------------------------------
+function Testar-CancelamentoOperacao {
+    Write-Host ""
+    Write-Host " [!] ESC pressionado. Deseja CANCELAR a operacao atual?" -ForegroundColor Yellow
+    $resp = Ler-OpcaoOuEsc -prompt "   Confirmar cancelamento? (S/N)" -valorPadrao "N"
+    return ($resp.Trim() -match '(?i)^s|sim|y|yes$')
+}
+
+function Read-Host {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromPipeline = $true)]
+        [object]$Prompt,
+        [switch]$AsSecureString
+    )
+    process {
+        $textoPrompt = if ($null -eq $Prompt) { "" } else { [string]$Prompt }
+
+        if ($AsSecureString) {
+            return Microsoft.PowerShell.Utility\Read-Host -Prompt $textoPrompt -AsSecureString
+        }
+
+        # Console real: leitura tecla a tecla para detectar o ESC
+        $podeLerTeclas = $false
+        try { if (-not [Console]::IsInputRedirected) { $podeLerTeclas = $true } } catch {}
+
+        if ($podeLerTeclas) {
+            Write-Host $textoPrompt -NoNewline
+            $buffer = ""
+            while ($true) {
+                $key = $null
+                try { $key = [Console]::ReadKey($true) } catch { $podeLerTeclas = $false; break }
+
+                if ($key.Key -eq [System.ConsoleKey]::Escape) {
+                    Write-Host ""
+                    if (Testar-CancelamentoOperacao) {
+                        throw [System.OperationCanceledException]::new("Operacao cancelada pelo usuario")
+                    }
+                    Write-Host $textoPrompt -NoNewline
+                    continue
+                }
+                if ($key.Key -eq [System.ConsoleKey]::Enter) {
+                    Write-Host ""
+                    return $buffer.Trim()
+                }
+                if ($key.Key -eq [System.ConsoleKey]::Backspace) {
+                    if ($buffer.Length -gt 0) {
+                        $buffer = $buffer.Substring(0, $buffer.Length - 1)
+                        [Console]::Write("`b `b")
+                    }
+                    continue
+                }
+                if ($key.KeyChar -and -not [char]::IsControl($key.KeyChar)) {
+                    $buffer += $key.KeyChar
+                    [Console]::Write($key.KeyChar)
+                }
+            }
+        }
+
+        # Fallback: entrada redirecionada ou console sem suporte a ReadKey
+        # Le direto do Console.In para que o EOF seja detectado ($null) sem
+        # consumir a linha de forma inconsistente.
+        try {
+            Write-Host $textoPrompt -NoNewline
+            $resposta = [Console]::In.ReadLine()
+            Write-Host ""
+            if ($null -eq $resposta) { return $null }
+            return $resposta
+        } catch {
+            if ($textoPrompt -eq "") { return Microsoft.PowerShell.Utility\Read-Host }
+            return Microsoft.PowerShell.Utility\Read-Host -Prompt $textoPrompt
+        }
+    }
+}
+
+# ==============================================================================
+# IDENTIDADE VISUAL E BANNER CORPORATIVO (ADAPTATIVO A ALTURA DO TERMINAL)
 # ==============================================================================
 function Exibir-LogoPrincipal {
+    # Terminal baixo: banner compacto para nao empurrar o menu para fora da tela
+    if ($script:terminalAltura -lt 28) {
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host " |        INNOVCORE TI - GESTAO DE ATIVOS E INVENTARIO  |  v2.0       |" -ForegroundColor Green
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        return
+    }
     Write-Host " +======================================================================+" -ForegroundColor Cyan
     Write-Host " |  ___ _   _ _   _  _____     ______ _____ ____  _____   _____ ___     |" -ForegroundColor Yellow
     Write-Host " | |_ _| \ | | \ | |/ _ \ \   / / ___/ _ \|  _ \| ____| |_   _|_ _|    |" -ForegroundColor Yellow
@@ -97,6 +398,11 @@ function Pausar-Tela {
     Write-Host ""
     Write-Host $mensagem -ForegroundColor Gray
     try {
+        # Entrada redirecionada (execucao automatizada): nao usar ReadKey, que ficaria bloqueando
+        if ([Console]::IsInputRedirected) {
+            Read-Host | Out-Null
+            return
+        }
         $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     } catch {
         Read-Host | Out-Null
@@ -122,6 +428,8 @@ function Ler-OpcaoOuEsc {
     try {
         if ([Console]::IsInputRedirected) {
             $val = Read-Host
+            # Entrada encerrada (EOF): encerra o fluxo em vez de repetir o menu em laco
+            if ($null -eq $val) { return "0" }
             if ([string]::IsNullOrWhiteSpace($val)) { return $valorPadrao }
             return $val.Trim()
         }
@@ -171,7 +479,11 @@ function Ler-OpcaoOuEsc {
 # MANIPULACAO ROBUSTA DE ARQUIVOS E BANCO CSV
 # ==============================================================================
 function Obter-RegistrosCsv {
-    param([string]$caminho)
+    param(
+        [string]$caminho,
+        [string]$empresaPadrao = "InnovTech",
+        [string]$setorPadrao = "TI"
+    )
     $lista = @()
     if (Test-Path $caminho) {
         try {
@@ -188,9 +500,111 @@ function Obter-RegistrosCsv {
                         $val = if ($k -lt $valores.Count) { $valores[$k].Trim() } else { "" }
                         $obj | Add-Member -MemberType NoteProperty -Name $prop -Value $val -Force
                     }
+                    # Garante compatibilidade com todos os campos do novo cabecalho
                     foreach ($propOficial in $script:cabecalhoOficial) {
                         if (-not ($obj.PSObject.Properties[$propOficial])) {
                             $obj | Add-Member -MemberType NoteProperty -Name $propOficial -Value "N/A" -Force
+                        }
+                    }
+                    # MIGRACAO RETROATIVA: Mapear campos antigos (legado TI) para novos campos patrimoniais
+                    # Empresa
+                    if ($obj.Empresa -and $obj.Empresa -ne "N/A" -and (-not $obj.Empresa_Unidade -or $obj.Empresa_Unidade -eq "N/A")) {
+                        $obj.Empresa_Unidade = $obj.Empresa
+                    }
+                    # Codigo_Tombamento (Patrimonio)
+                    if ($obj.Patrimonio -and $obj.Patrimonio -ne "N/A" -and (-not $obj.Codigo_Tombamento -or $obj.Codigo_Tombamento -eq "N/A")) {
+                        $obj.Codigo_Tombamento = $obj.Patrimonio
+                    }
+                    # CRM_Serial (Numero_Serie)
+                    if ($obj.Numero_Serie -and $obj.Numero_Serie -ne "N/A" -and (-not $obj.CRM_Serial -or $obj.CRM_Serial -eq "N/A")) {
+                        $obj.CRM_Serial = $obj.Numero_Serie
+                    }
+                    # Categoria_Bem (Tipo_Equipamento -> Tecnologia)
+                    if ($obj.Tipo_Equipamento -and $obj.Tipo_Equipamento -ne "N/A" -and (-not $obj.Categoria_Bem -or $obj.Categoria_Bem -eq "N/A")) {
+                        $obj.Categoria_Bem = "Tecnologia"
+                    }
+                    # Tipo_Especifico (Tipo_Equipamento ou Tipo_Ativo)
+                    if ($obj.Tipo_Ativo -and $obj.Tipo_Ativo -ne "N/A" -and (-not $obj.Tipo_Especifico -or $obj.Tipo_Especifico -eq "N/A")) {
+                        $obj.Tipo_Especifico = $obj.Tipo_Ativo
+                    } elseif ($obj.Tipo_Equipamento -and $obj.Tipo_Equipamento -ne "N/A" -and (-not $obj.Tipo_Especifico -or $obj.Tipo_Especifico -eq "N/A")) {
+                        $obj.Tipo_Especifico = $obj.Tipo_Equipamento
+                    }
+                    # Nome_Bem_Produto (Marca + Modelo)
+                    if (($obj.Marca -and $obj.Marca -ne "N/A") -or ($obj.Modelo -and $obj.Modelo -ne "N/A")) {
+                        if (-not $obj.Nome_Bem_Produto -or $obj.Nome_Bem_Produto -eq "N/A") {
+                            $marca = if ($obj.Marca -and $obj.Marca -ne "N/A") { $obj.Marca } else { "" }
+                            $modelo = if ($obj.Modelo -and $obj.Modelo -ne "N/A") { $obj.Modelo } else { "" }
+                            $obj.Nome_Bem_Produto = ($marca + " " + $modelo).Trim()
+                        }
+                    }
+                    # Setor_Atribuido (Setor)
+                    if ($obj.Setor -and $obj.Setor -ne "N/A" -and (-not $obj.Setor_Atribuido -or $obj.Setor_Atribuido -eq "N/A")) {
+                        $obj.Setor_Atribuido = $obj.Setor
+                    }
+                    # Responsavel_Colaborador (Usuario)
+                    if ($obj.Usuario -and $obj.Usuario -ne "N/A" -and (-not $obj.Responsavel_Colaborador -or $obj.Responsavel_Colaborador -eq "N/A")) {
+                        $obj.Responsavel_Colaborador = $obj.Usuario
+                    }
+                    # Situacao (Status_Ativo)
+                    if ($obj.Status_Ativo -and $obj.Status_Ativo -ne "N/A" -and (-not $obj.Situacao -or $obj.Situacao -eq "N/A")) {
+                        $obj.Situacao = $obj.Status_Ativo
+                    }
+                    # Data_Compra (Ano_Fabricacao -> 01/01/ANO)
+                    if ($obj.Ano_Fabricacao -and $obj.Ano_Fabricacao -ne "N/A" -and (-not $obj.Data_Compra -or $obj.Data_Compra -eq "N/A")) {
+                        if ($obj.Ano_Fabricacao -match '^\d{4}$') {
+                            $obj.Data_Compra = "01/01/" + $obj.Ano_Fabricacao
+                        } else {
+                            $obj.Data_Compra = $obj.Ano_Fabricacao
+                        }
+                    }
+                    # Valor_Compra (Valor_Aquisicao)
+                    if ($obj.Valor_Aquisicao -and $obj.Valor_Aquisicao -ne "N/A" -and (-not $obj.Valor_Compra -or $obj.Valor_Compra -eq "N/A")) {
+                        $obj.Valor_Compra = $obj.Valor_Aquisicao
+                    }
+                    # Localizacao_Fisica_Posto (Localizacao ou Setor)
+                    if ($obj.Localizacao -and $obj.Localizacao -ne "N/A" -and (-not $obj.Localizacao_Fisica_Posto -or $obj.Localizacao_Fisica_Posto -eq "N/A")) {
+                        $obj.Localizacao_Fisica_Posto = $obj.Localizacao
+                    } elseif ($obj.Setor -and $obj.Setor -ne "N/A" -and (-not $obj.Localizacao_Fisica_Posto -or $obj.Localizacao_Fisica_Posto -eq "N/A")) {
+                        $obj.Localizacao_Fisica_Posto = $obj.Setor
+                    }
+                    # Observacoes_Adicionais (Observacoes)
+                    if ($obj.Observacoes -and $obj.Observacoes -ne "N/A" -and (-not $obj.Observacoes_Adicionais -or $obj.Observacoes_Adicionais -eq "N/A")) {
+                        $obj.Observacoes_Adicionais = $obj.Observacoes
+                    }
+                    # Defaults para campos novos obrigatorios
+                    if (-not $obj.Empresa_Unidade -or $obj.Empresa_Unidade -eq "N/A") { $obj.Empresa_Unidade = $empresaPadrao }
+                    if (-not $obj.Categoria_Bem -or $obj.Categoria_Bem -eq "N/A") { $obj.Categoria_Bem = "Tecnologia" }
+                    if (-not $obj.Situacao -or $obj.Situacao -eq "N/A") { $obj.Situacao = "Ativo/Operacional" }
+                    if (-not $obj.Setor_Atribuido -or $obj.Setor_Atribuido -eq "N/A") { $obj.Setor_Atribuido = $setorPadrao }
+                    if (-not $obj.Responsavel_Colaborador -or $obj.Responsavel_Colaborador -eq "N/A") { $obj.Responsavel_Colaborador = $obj.Usuario }
+                    if (-not $obj.Localizacao_Fisica_Posto -or $obj.Localizacao_Fisica_Posto -eq "N/A") { $obj.Localizacao_Fisica_Posto = $obj.Setor_Atribuido }
+
+                    # ALIAS DE COMPATIBILIDADE (patrimonial -> legado)
+                    # Cria os campos antigos quando a base usa apenas o cabecalho patrimonial novo,
+                    # para que as telas antigas (consulta, dashboard, exclusao) continuem funcionando.
+                    $anoCompra = if ($obj.Data_Compra -and $obj.Data_Compra -match '(\d{4})') { $Matches[1] } else { "" }
+                    $aliases = [ordered]@{
+                        "Empresa"          = $obj.Empresa_Unidade
+                        "Patrimonio"       = $obj.Codigo_Tombamento
+                        "Usuario"          = $obj.Responsavel_Colaborador
+                        "Setor"            = $obj.Setor_Atribuido
+                        "Tipo_Ativo"       = $obj.Tipo_Especifico
+                        "Tipo_Equipamento" = $obj.Tipo_Especifico
+                        "Categoria_Ativo"  = $obj.Categoria_Bem
+                        "Numero_Serie"     = $obj.CRM_Serial
+                        "Valor_Aquisicao"  = $obj.Valor_Compra
+                        "Status_Ativo"     = $obj.Situacao
+                        "Localizacao"      = $obj.Localizacao_Fisica_Posto
+                        "Observacoes"      = $obj.Observacoes_Adicionais
+                        "Ano_Aquisicao"    = $anoCompra
+                        "Ano_Fabricacao"   = $anoCompra
+                        "Funcao"           = "N/A"
+                        "Marca"            = "N/A"
+                        "Modelo"           = "N/A"
+                    }
+                    foreach ($chave in $aliases.Keys) {
+                        if (-not $obj.PSObject.Properties[$chave]) {
+                            $obj | Add-Member -MemberType NoteProperty -Name $chave -Value $aliases[$chave] -Force
                         }
                     }
                     $lista += $obj
@@ -200,7 +614,8 @@ function Obter-RegistrosCsv {
             Write-Host " [!] Aviso ao ler CSV: $($_.Exception.Message)" -ForegroundColor Yellow
         }
     }
-    return $lista
+    # Retorna sempre como ARRAY (evita que um unico registro perca o .Count no PowerShell 5.1)
+    return ,$lista
 }
 
 function Fazer-BackupCsv {
@@ -219,7 +634,11 @@ function Fazer-BackupCsv {
 }
 
 function Salvar-RegistrosCsv {
-    param([string]$caminho, [array]$registros)
+    param(
+        [string]$caminho,
+        [array]$registros,
+        [switch]$BaseAtivos
+    )
     $limparCampo = { 
         param($c) 
         if ($null -ne $c) { 
@@ -244,16 +663,21 @@ function Salvar-RegistrosCsv {
     foreach ($r in $registros) {
         $linha = @(
             (& $limparCampo $r.Data_Registro),
-            (& $limparCampo $r.Empresa),
-            (& $limparCampo $r.Patrimonio),
-            (& $limparCampo $r.Usuario),
-            (& $limparCampo $r.Funcao),
-            (& $limparCampo $r.Setor),
-            (& $limparCampo $r.Tipo_Equipamento),
-            (& $limparCampo $r.Marca),
-            (& $limparCampo $r.Modelo),
-            (& $limparCampo $r.Numero_Serie),
-            (& $limparCampo $r.Ano_Fabricacao),
+            (& $limparCampo $r.Empresa_Unidade),
+            (& $limparCampo $r.Codigo_Tombamento),
+            (& $limparCampo $r.Numero_Nota_Fiscal),
+            (& $limparCampo $r.CRM_Serial),
+            (& $limparCampo $r.Categoria_Bem),
+            (& $limparCampo $r.Tipo_Especifico),
+            (& $limparCampo $r.Nome_Bem_Produto),
+            (& $limparCampo $r.Setor_Atribuido),
+            (& $limparCampo $r.Responsavel_Colaborador),
+            (& $limparCampo $r.Fornecedor),
+            (& $limparCampo $r.Situacao),
+            (& $limparCampo $r.Data_Compra),
+            (& $limparCampo $r.Valor_Compra),
+            (& $limparCampo $r.Localizacao_Fisica_Posto),
+            (& $limparCampo $r.Observacoes_Adicionais),
             (& $limparCampo $r.Nome_Computador),
             (& $limparCampo $r.Processador),
             (& $limparCampo $r.Memoria_RAM),
@@ -261,7 +685,9 @@ function Salvar-RegistrosCsv {
             (& $limparCampo $r.Placa_Video),
             (& $limparCampo $r.Sistema_Operacional),
             (& $limparCampo $r.IP_Rede),
-            (& $limparCampo $r.MAC_Rede)
+            (& $limparCampo $r.MAC_Rede),
+            (& $limparCampo $r.Bateria),
+            (& $limparCampo $r.Android_Versao)
         ) -join ';'
         $linhasTexto.Add($linha)
     }
@@ -280,7 +706,11 @@ function Salvar-RegistrosCsv {
         try {
             [System.IO.File]::WriteAllText($caminhoAlvo, $conteudoFinal, $script:utf8ComBOM)
             $salvo = $true
-            $script:caminhoCsv = $caminhoAlvo
+            if ($BaseAtivos) {
+                $script:caminhoCsvAtivos = $caminhoAlvo
+            } else {
+                $script:caminhoCsv = $caminhoAlvo
+            }
         } catch {
             Write-Host ""
             Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Red
@@ -304,11 +734,13 @@ function Salvar-RegistrosCsv {
             switch ($opcaoErro.Trim().ToUpper()) {
                 "N" {
                     $timestampNovo = Get-Date -Format "yyyyMMdd_HHmmss"
-                    $caminhoAlvo = Join-Path $script:internalDir "inventario_innovcore_$timestampNovo.csv"
+                    $nomeResgate = if ($BaseAtivos) { "inventario_ativos_innovcore" } else { "inventario_innovcore" }
+                    $caminhoAlvo = Join-Path $scriptRootDir "$nomeResgate`_$timestampNovo.csv"
                     Write-Host "   -> Tentando gravar em: $caminhoAlvo" -ForegroundColor Cyan
                 }
                 "E" {
-                    $caminhoAlvo = Join-Path $env:USERPROFILE "Desktop\inventario_innovcore_emergencia.csv"
+                    $nomeResgate = if ($BaseAtivos) { "inventario_ativos_innovcore" } else { "inventario_innovcore" }
+                    $caminhoAlvo = Join-Path $env:USERPROFILE "Desktop\$nomeResgate`_emergencia.csv"
                     Write-Host "   -> Salvando na Area de Trabalho: $caminhoAlvo" -ForegroundColor Yellow
                 }
                 default {
@@ -321,7 +753,129 @@ function Salvar-RegistrosCsv {
 }
 
 # ==============================================================================
-# CALCULO INTELIGENTE DE PATRIMONIO SEQUENCIAL
+# CATALOGO EDITAVEL DE TIPOS DE BENS (MODULO 1 - REGISTRO DE ATIVOS)
+# ==============================================================================
+# Formato do arquivo: Categoria;Tipo_Especifico;Nome_Bem_Produto;Setor_Sugerido
+# O arquivo e livre para o usuario editar no Excel e adicionar novos tipos.
+function Obter-CatalogoAtivos {
+    $lista = @()
+    $caminho = $script:caminhoCatalogoAtivos
+
+    if (!(Test-Path $caminho)) {
+        Write-Host " [!] Catalogo de tipos nao encontrado: $caminho" -ForegroundColor Yellow
+        Write-Host "     Os tipos serao digitados livremente. Reinstale o pacote para restaurar o catalogo." -ForegroundColor Gray
+        return ,$lista
+    }
+
+    try {
+        $raw = [System.IO.File]::ReadAllText($caminho, [System.Text.Encoding]::UTF8)
+        $linhas = $raw -split "\r?\n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+        for ($i = 1; $i -lt $linhas.Count; $i++) {
+            $v = $linhas[$i] -split ';'
+            $categoria = if ($v.Count -gt 0) { $v[0].Trim() } else { "" }
+            $tipo = if ($v.Count -gt 1) { $v[1].Trim() } else { "" }
+            if ($tipo -eq "") { continue }
+            $nomeBem = if ($v.Count -gt 2) { $v[2].Trim() } else { "" }
+            $setorSugerido = if ($v.Count -gt 3) { $v[3].Trim() } else { "" }
+            $lista += [PSCustomObject]@{
+                Categoria        = $categoria
+                Tipo_Especifico  = $tipo
+                Nome_Bem_Produto = $(if ($nomeBem -eq "") { $tipo } else { $nomeBem })
+                Setor_Sugerido   = $setorSugerido
+            }
+        }
+    } catch {
+        Write-Host " [!] Erro ao ler o catalogo de tipos: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    return ,$lista
+}
+
+# Devolve a lista de categorias unicas do catalogo (ordem de aparicao no arquivo)
+function Obter-CategoriasCatalogo {
+    param([array]$catalogo)
+    $lista = @()
+    if (!$catalogo -or $catalogo.Count -eq 0) { return ,$lista }
+    foreach ($item in $catalogo) {
+        if ($item.Categoria -and ($lista -notcontains $item.Categoria)) {
+            $lista += $item.Categoria
+        }
+    }
+    return ,$lista
+}
+
+# Devolve os tipos de uma categoria (sem repeticao)
+function Obter-TiposPorCategoria {
+    param([array]$catalogo, [string]$categoria)
+    $lista = @()
+    if (!$catalogo -or $catalogo.Count -eq 0) { return ,$lista }
+    foreach ($item in $catalogo) {
+        if ($item.Categoria -eq $categoria -and $item.Tipo_Especifico) {
+            if ($lista -notcontains $item.Tipo_Especifico) {
+                $lista += $item.Tipo_Especifico
+            }
+        }
+    }
+    return ,$lista
+}
+
+# ==============================================================================
+# AUDITORIA DE DUPLICIDADE PARA BENS PATRIMONIAIS
+# ==============================================================================
+# Observacao: a Nota Fiscal NAO e usada como criterio de duplicidade porque
+# uma unica nota fiscal normalmente cobre varios bens do mesmo lote.
+function Testar-DuplicidadeBem {
+    param(
+        [array]$registros,
+        [string]$codigoTombamento,
+        [string]$crmSerial
+    )
+
+    if (!$registros -or $registros.Count -eq 0) { return $null }
+
+    foreach ($r in $registros) {
+        $motivo = $null
+
+        # 1. Codigo de Tombamento (PAT-XXXX) - identificador imutavel do bem
+        $tombamentoExistente = if ($r.Codigo_Tombamento -and $r.Codigo_Tombamento -ne "N/A") { $r.Codigo_Tombamento } else { "" }
+        if (![string]::IsNullOrWhiteSpace($codigoTombamento) -and ![string]::IsNullOrWhiteSpace($tombamentoExistente)) {
+            if ($tombamentoExistente.Trim().ToUpper() -eq $codigoTombamento.Trim().ToUpper()) {
+                $motivo = "Codigo de Tombamento repetido ($codigoTombamento)"
+            }
+        }
+
+        # 2. CRM / Serial - identificacao fisica unica do bem
+        $serialExistente = if ($r.CRM_Serial -and $r.CRM_Serial -ne "N/A") { $r.CRM_Serial } else { "" }
+        if (-not $motivo -and ![string]::IsNullOrWhiteSpace($crmSerial) -and $crmSerial.Trim() -notmatch '(?i)^n/a|none|default|0000$') {
+            if (![string]::IsNullOrWhiteSpace($serialExistente) -and $serialExistente.Trim().ToUpper() -eq $crmSerial.Trim().ToUpper()) {
+                $motivo = "CRM/Serial identico ($crmSerial)"
+            }
+        }
+
+        if ($motivo) {
+            return [PSCustomObject]@{
+                RegistroExistente = $r
+                Motivo            = $motivo
+            }
+        }
+    }
+
+    return $null
+}
+
+# ==============================================================================
+# HELPERS DE COMPATIBILIDADE ENTRE O MODELO PATRIMONIAL E O MODELO LEGADO (TI)
+# ==============================================================================
+# Devolve o setor do registro, priorizando o campo patrimonial novo
+function Obter-SetorDoRegistro {
+    param($Registro)
+    if ($Registro.Setor_Atribuido -and $Registro.Setor_Atribuido -ne "N/A") { return $Registro.Setor_Atribuido }
+    if ($Registro.Setor -and $Registro.Setor -ne "N/A") { return $Registro.Setor }
+    return ""
+}
+
+# ==============================================================================
+# CALCULO INTELIGENTE DE CODIGO DE TOMBAMENTO SEQUENCIAL (PAT-XXXX)
 # ==============================================================================
 function Obter-ProximoPatrimonio {
     param([array]$registros)
@@ -331,7 +885,9 @@ function Obter-ProximoPatrimonio {
     
     $maiorNumero = 0
     foreach ($r in $registros) {
-        if ($r.Patrimonio -match 'PAT-(\d+)') {
+        # Verifica tanto Codigo_Tombamento (novo) quanto Patrimonio (legado)
+        $campoVerificar = if ($r.Codigo_Tombamento -and $r.Codigo_Tombamento -ne "N/A") { $r.Codigo_Tombamento } elseif ($r.Patrimonio -and $r.Patrimonio -ne "N/A") { $r.Patrimonio } else { "" }
+        if ($campoVerificar -match 'PAT-(\d+)') {
             $num = [int]$Matches[1]
             if ($num -gt $maiorNumero) {
                 $maiorNumero = $num
@@ -353,8 +909,9 @@ function Obter-ProximoPatrimonio {
 function Testar-DuplicidadeEquipamento {
     param(
         [array]$registros,
-        [string]$patrimonio,
-        [string]$numeroSerie,
+        [string]$codigoTombamento,
+        [string]$crmSerial,
+        [string]$numeroNotaFiscal,
         [string]$macRede,
         [string]$nomeComputador
     )
@@ -364,24 +921,34 @@ function Testar-DuplicidadeEquipamento {
     foreach ($r in $registros) {
         $motivo = $null
         
-        # 1. Verifica Patrimonio
-        if (![string]::IsNullOrWhiteSpace($patrimonio) -and ![string]::IsNullOrWhiteSpace($r.Patrimonio)) {
-            if ($r.Patrimonio.Trim().ToUpper() -eq $patrimonio.Trim().ToUpper()) {
-                $motivo = "Patrimonio repetido ($patrimonio)"
+        # 1. Verifica Codigo de Tombamento (PAT-XXXX) - Campo principal imutavel
+        $tombamentoExistente = if ($r.Codigo_Tombamento -and $r.Codigo_Tombamento -ne "N/A") { $r.Codigo_Tombamento } elseif ($r.Patrimonio -and $r.Patrimonio -ne "N/A") { $r.Patrimonio } else { "" }
+        if (![string]::IsNullOrWhiteSpace($codigoTombamento) -and ![string]::IsNullOrWhiteSpace($tombamentoExistente)) {
+            if ($tombamentoExistente.Trim().ToUpper() -eq $codigoTombamento.Trim().ToUpper()) {
+                $motivo = "Codigo de Tombamento repetido ($codigoTombamento)"
             }
         }
         
-        # 2. Verifica Serial Number (se nao for N/A ou generico)
-        if (-not $motivo -and ![string]::IsNullOrWhiteSpace($numeroSerie) -and $numeroSerie.Trim() -notmatch '(?i)^n/a|none|default|to be filled|0000$') {
-            if (![string]::IsNullOrWhiteSpace($r.Numero_Serie) -and $r.Numero_Serie.Trim().ToUpper() -eq $numeroSerie.Trim().ToUpper()) {
-                $motivo = "Numero de Serie da BIOS identico ($numeroSerie)"
+        # 2. Verifica Numero da Nota Fiscal (se informado)
+        if (-not $motivo -and ![string]::IsNullOrWhiteSpace($numeroNotaFiscal) -and $numeroNotaFiscal.Trim() -notmatch '(?i)^n/a|none|default|0000$') {
+            $nfExistente = if ($r.Numero_Nota_Fiscal -and $r.Numero_Nota_Fiscal -ne "N/A") { $r.Numero_Nota_Fiscal } else { "" }
+            if (![string]::IsNullOrWhiteSpace($nfExistente) -and $nfExistente.Trim().ToUpper() -eq $numeroNotaFiscal.Trim().ToUpper()) {
+                $motivo = "Numero de Nota Fiscal identico ($numeroNotaFiscal)"
             }
         }
         
-        # 3. Verifica Endereco MAC (se nao for N/A)
+        # 3. Verifica CRM/Serial (se nao for N/A ou generico)
+        $serialExistente = if ($r.CRM_Serial -and $r.CRM_Serial -ne "N/A") { $r.CRM_Serial } elseif ($r.Numero_Serie -and $r.Numero_Serie -ne "N/A") { $r.Numero_Serie } else { "" }
+        if (-not $motivo -and ![string]::IsNullOrWhiteSpace($crmSerial) -and $crmSerial.Trim() -notmatch '(?i)^n/a|none|default|to be filled|0000$') {
+            if (![string]::IsNullOrWhiteSpace($serialExistente) -and $serialExistente.Trim().ToUpper() -eq $crmSerial.Trim().ToUpper()) {
+                $motivo = "CRM/Serial identico ($crmSerial)"
+            }
+        }
+        
+        # 4. Verifica Endereco MAC (se nao for N/A) - para equipamentos de rede
         if (-not $motivo -and ![string]::IsNullOrWhiteSpace($macRede) -and $macRede.Trim() -notmatch '(?i)^n/a$') {
             if (![string]::IsNullOrWhiteSpace($r.MAC_Rede) -and $r.MAC_Rede.Trim().ToUpper() -eq $macRede.Trim().ToUpper()) {
-                $motivo = "Placa de Rede / MAC Address identico ($macRede)"
+                $motivo = "MAC Address identico ($macRede)"
             }
         }
         
@@ -1095,7 +1662,7 @@ function Iniciar-CadastroAndroidTablet {
         )
         $setoresHistorico = @()
         if ($registrosAtuais.Count -gt 0) {
-            $setoresHistorico = @($registrosAtuais | ForEach-Object { $_.Setor.Trim() } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
+            $setoresHistorico = @($registrosAtuais | ForEach-Object { Obter-SetorDoRegistro $_ } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
         }
         $listaSetores = @()
         foreach ($s in $setoresHistorico) { if ($listaSetores -notcontains $s) { $listaSetores += $s } }
@@ -1131,7 +1698,7 @@ function Iniciar-CadastroAndroidTablet {
             $numFormatado = ($i + 1).ToString().PadLeft(2, ' ')
             $ehHistorico = ($setoresHistorico -contains $listaSetores[$i])
             $corSetor = if ($ehHistorico) { "Green" } else { "White" }
-            $qtdSetor = @($registrosAtuais | Where-Object { $_.Setor -eq $listaSetores[$i] }).Count
+            $qtdSetor = @($registrosAtuais | Where-Object { (Obter-SetorDoRegistro $_) -eq $listaSetores[$i] }).Count
             $tagQtd = if ($qtdSetor -gt 0) { " ($qtdSetor Ativos)" } else { "" }
             Write-Host "     [$numFormatado] " -NoNewline -ForegroundColor Cyan
             Write-Host "$($listaSetores[$i])$tagQtd" -ForegroundColor $corSetor
@@ -1234,7 +1801,7 @@ function Iniciar-CadastroManual {
     )
     $setoresHistorico = @()
     if ($registrosAtuais.Count -gt 0) {
-        $setoresHistorico = @($registrosAtuais | ForEach-Object { $_.Setor.Trim() } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
+        $setoresHistorico = @($registrosAtuais | ForEach-Object { Obter-SetorDoRegistro $_ } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
     }
     $listaSetores = @()
     foreach ($s in $setoresHistorico) { if ($listaSetores -notcontains $s) { $listaSetores += $s } }
@@ -1274,7 +1841,7 @@ function Iniciar-CadastroManual {
         $numFormatado = ($i + 1).ToString().PadLeft(2, ' ')
         $ehHistorico = ($setoresHistorico -contains $listaSetores[$i])
         $corSetor = if ($ehHistorico) { "Green" } else { "White" }
-        $qtdSetor = @($registrosAtuais | Where-Object { $_.Setor -eq $listaSetores[$i] }).Count
+        $qtdSetor = @($registrosAtuais | Where-Object { (Obter-SetorDoRegistro $_) -eq $listaSetores[$i] }).Count
         $tagQtd = if ($qtdSetor -gt 0) { " ($qtdSetor PCs)" } else { "" }
         Write-Host "     [$numFormatado] " -NoNewline -ForegroundColor Cyan
         Write-Host "$($listaSetores[$i])$tagQtd" -ForegroundColor $corSetor
@@ -1523,6 +2090,2168 @@ function Iniciar-CadastroManual {
 }
 
 # ==============================================================================
+# MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO (BENS GERAIS) - v2.0
+# ==============================================================================
+# --------------------------------------------------------------------------
+# HELPERS DE FORMATACAO E VALIDACAO
+# --------------------------------------------------------------------------
+function Normalizar-ValorMoeda {
+    param([string]$entrada)
+    if ([string]::IsNullOrWhiteSpace($entrada)) { return "0,00" }
+    $v = $entrada.Trim() -replace '(?i)R\$', '' -replace '\s', ''
+    if ($v -eq "") { return "0,00" }
+    if ($v -match ',\d{1,2}$') { $v = ($v -replace '\.', '') -replace ',', '.' }
+    $num = 0.0
+    if ([double]::TryParse($v, [System.Globalization.NumberStyles]::Any, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$num)) {
+        return $num.ToString("0.00", [System.Globalization.CultureInfo]::InvariantCulture).Replace('.', ',')
+    }
+    return "0,00"
+}
+
+function Converter-ValorNumerico {
+    param([string]$valor)
+    if ([string]::IsNullOrWhiteSpace($valor)) { return 0.0 }
+    $v = $valor.Trim() -replace '(?i)R\$', '' -replace '\s', ''
+    if ($v -eq "" -or $v -eq "N/A") { return 0.0 }
+    if ($v -match ',\d{1,2}$') { $v = ($v -replace '\.', '') -replace ',', '.' }
+    $num = 0.0
+    if ([double]::TryParse($v, [System.Globalization.NumberStyles]::Any, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$num)) {
+        return $num
+    }
+    return 0.0
+}
+
+function Formatar-Moeda {
+    param([double]$valor)
+    return $valor.ToString("N2", [System.Globalization.CultureInfo]::GetCultureInfo("pt-BR"))
+}
+
+function Validar-DataBR {
+    param([string]$data)
+    if ([string]::IsNullOrWhiteSpace($data)) { return $false }
+    if ($data -match '^(\d{2})/(\d{2})/(\d{4})$') {
+        $dia = [int]$Matches[1]; $mes = [int]$Matches[2]; $ano = [int]$Matches[3]
+        if ($dia -ge 1 -and $dia -le 31 -and $mes -ge 1 -and $mes -le 12 -and $ano -ge 1900 -and $ano -le 2100) {
+            try { [void](New-Object System.DateTime($ano, $mes, $dia)); return $true } catch { return $false }
+        }
+    }
+    return $false
+}
+
+function Cortar-Texto {
+    param([string]$texto, [int]$tamanho)
+    if ($null -eq $texto) { return "" }
+    if ($texto.Length -le $tamanho) { return $texto }
+    if ($tamanho -le 1) { return $texto.Substring(0, [Math]::Max(0, $tamanho)) }
+    return $texto.Substring(0, $tamanho - 1) + "."
+}
+
+function Obter-CorSituacao {
+    param([string]$situacao)
+    switch -Regex ($situacao) {
+        'Ativo|Operacional' { return "Green" }
+        'Manuten'            { return "Yellow" }
+        'Estoque|Disponivel' { return "Cyan" }
+        'Baixado|Inativo'     { return "Red" }
+        'Emprestado|Cedido'  { return "Magenta" }
+        default              { return "White" }
+    }
+}
+
+# --------------------------------------------------------------------------
+# SELETOR COM FILTRO INCREMENTAL
+# Digite para filtrar (ex: "ar con") ou o numero da opcao. Muito mais rapido
+# do que rolar uma lista com 50 itens.
+# --------------------------------------------------------------------------
+function Selecionar-Opcao {
+    param(
+        [string]$titulo,
+        [array]$opcoes,
+        [string]$padrao = "",
+        [switch]$PermiteNovo,
+        [string]$rotuloNovo = "Digitar outro",
+        [int]$maximoVisiveis = 12
+    )
+
+    $lista = @($opcoes)
+    if ($lista.Count -eq 0) {
+        if ($PermiteNovo) {
+            $novo = ""
+            while ([string]::IsNullOrWhiteSpace($novo)) {
+                $novo = Read-Host "   $titulo"
+                if ($null -eq $novo) { return $null }
+            }
+            return $novo
+        }
+        return $null
+    }
+
+    $filtro = ""
+    while ($true) {
+        Write-Host ""
+        Write-Host "   $titulo" -ForegroundColor Yellow
+        if ($filtro -ne "") {
+            Write-Host "   Filtro ativo: " -NoNewline -ForegroundColor DarkGray
+            Write-Host "$filtro" -ForegroundColor Cyan
+        }
+
+        $exibidos = if ($filtro -ne "") { @($lista | Where-Object { $_ -match "(?i)$([regex]::Escape($filtro))" }) } else { $lista }
+        if ($exibidos.Count -eq 0) {
+            Write-Host "   [!] Nenhum item encontrado para '$filtro'. Limpando o filtro..." -ForegroundColor Red
+            $filtro = ""
+            continue
+        }
+
+        # Correspondencia exata: seleciona direto
+        $exato = $exibidos | Where-Object { $_.ToUpper() -eq $filtro.ToUpper() } | Select-Object -First 1
+        if ($exato) { return $exato }
+
+        $mostrar = if ($exibidos.Count -gt $maximoVisiveis) { @($exibidos[0..($maximoVisiveis - 1)]) } else { $exibidos }
+        for ($i = 0; $i -lt $mostrar.Count; $i++) {
+            $n = ($i + 1).ToString().PadLeft(2, ' ')
+            Write-Host "     [$n] " -NoNewline -ForegroundColor Cyan
+            Write-Host "$($mostrar[$i])" -ForegroundColor White
+        }
+        if ($exibidos.Count -gt $mostrar.Count) {
+            Write-Host "     ... mais $($exibidos.Count - $mostrar.Count) item(ns) - digite texto para filtrar" -ForegroundColor DarkGray
+        }
+        if ($PermiteNovo) {
+            Write-Host "     [ 0] " -NoNewline -ForegroundColor DarkGray
+            Write-Host "$rotuloNovo" -ForegroundColor DarkGray
+        }
+
+        $resposta = Read-Host "   Numero, texto para filtrar ou ENTER"
+        if ($null -eq $resposta) { return $null }
+        $resposta = $resposta.Trim()
+
+        if ($resposta -eq "") {
+            if ($padrao -ne "") { return $padrao }
+            continue
+        }
+
+        $num = 0
+        if ([int]::TryParse($resposta, [ref]$num)) {
+            if ($num -eq 0 -and $PermiteNovo) { return "__NOVO__" }
+            if ($num -ge 1 -and $num -le $exibidos.Count) { return $exibidos[$num - 1] }
+            Write-Host "   [!] Opcao invalida." -ForegroundColor Red
+            continue
+        }
+
+        $filtro = $resposta
+    }
+}
+
+# --------------------------------------------------------------------------
+# CADASTRO MESTRE DE COLABORADORES E FORNECEDORES
+# --------------------------------------------------------------------------
+function Obter-MestreCsv {
+    param([string]$caminho)
+    $lista = @()
+    if (!(Test-Path $caminho)) { return ,$lista }
+    try {
+        $raw = [System.IO.File]::ReadAllText($caminho, [System.Text.Encoding]::UTF8)
+        $linhas = $raw -split "\r?\n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+        for ($i = 1; $i -lt $linhas.Count; $i++) {
+            $v = $linhas[$i] -split ';'
+            if ($v.Count -lt 2) { continue }
+            $lista += [PSCustomObject]@{
+                Codigo  = $v[0].Trim()
+                Nome    = $v[1].Trim()
+                Campo3  = $(if ($v.Count -gt 2) { $v[2].Trim() } else { "" })
+                Campo4  = $(if ($v.Count -gt 3) { $v[3].Trim() } else { "" })
+                Campo5  = $(if ($v.Count -gt 4) { $v[4].Trim() } else { "" })
+                Campo6  = $(if ($v.Count -gt 5) { $v[5].Trim() } else { "" })
+                Ativo   = $(if ($v.Count -gt 6) { $v[6].Trim() } else { "Sim" })
+            }
+        }
+    } catch {
+        Write-Host " [!] Erro ao ler o cadastro mestre: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    return ,$lista
+}
+
+function Salvar-MestreCsv {
+    param([string]$caminho, [array]$registros, [string[]]$cabecalho)
+    $pasta = [System.IO.Path]::GetDirectoryName($caminho)
+    if ($pasta -and !(Test-Path $pasta)) { try { New-Item -ItemType Directory -Path $pasta -Force | Out-Null } catch {} }
+    $enc = New-Object System.Text.UTF8Encoding($true)
+    $linhas = [System.Collections.Generic.List[string]]::new()
+    $linhas.Add(($cabecalho -join ';'))
+    foreach ($r in $registros) {
+        $campos = @($r.Codigo, $r.Nome, $r.Campo3, $r.Campo4, $r.Campo5, $r.Campo6, $r.Ativo)
+        $linhas.Add((($campos | ForEach-Object { ($_.ToString() -replace ';', ',') -replace "[\r\n]+", " " }) -join ';'))
+    }
+    [System.IO.File]::WriteAllText($caminho, (($linhas -join "`r`n") + "`r`n"), $enc)
+}
+
+function Obter-ProximoCodigoMestre {
+    param([array]$registros, [string]$prefixo)
+    $maior = 0
+    foreach ($r in $registros) {
+        if ($r.Codigo -match "$prefixo-(\d+)") {
+            $n = [int]$Matches[1]
+            if ($n -gt $maior) { $maior = $n }
+        }
+    }
+    return ("{0}-{1}" -f $prefixo, ($maior + 1).ToString("D4"))
+}
+
+function Menu-GerenciarParceiros {
+    param()
+
+    $emGestao = $true
+    while ($emGestao) {
+        $colaboradores = Obter-MestreCsv -caminho $script:caminhoCatalogoColaboradores
+        $fornecedores  = Obter-MestreCsv -caminho $script:caminhoCatalogoFornecedores
+
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host " |          >>> CADASTRO MESTRE - COLABORADORES E FORNECEDORES <<<      |" -ForegroundColor Yellow
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host "  Colaboradores cadastrados: " -NoNewline -ForegroundColor Gray; Write-Host "$($colaboradores.Count)" -ForegroundColor Green
+        Write-Host "  Fornecedores cadastrados:  " -NoNewline -ForegroundColor Gray; Write-Host "$($fornecedores.Count)" -ForegroundColor Green
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host "  [1] Listar colaboradores" -ForegroundColor White
+        Write-Host "  [2] Cadastrar colaborador" -ForegroundColor Green
+        Write-Host "  [3] Editar colaborador" -ForegroundColor Cyan
+        Write-Host "  [4] Desativar / Reativar colaborador" -ForegroundColor Yellow
+        Write-Host "  [5] Listar fornecedores" -ForegroundColor White
+        Write-Host "  [6] Cadastrar fornecedor" -ForegroundColor Green
+        Write-Host "  [7] Editar fornecedor" -ForegroundColor Cyan
+        Write-Host "  [8] Desativar / Reativar fornecedor" -ForegroundColor Yellow
+        Write-Host "  [9] Abrir as planilhas mestres no Excel" -ForegroundColor DarkCyan
+        Write-Host "  [0] Voltar ao Módulo 1" -ForegroundColor Gray
+        Write-Host ""
+
+        $opc = Ler-OpcaoOuEsc -prompt " Escolha a opcao" -valorPadrao "1"
+
+        switch ($opc.Trim()) {
+            "1" {
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                Write-Host " |                  >>> COLABORADORES CADASTRADOS <<<                   |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                if ($colaboradores.Count -eq 0) {
+                    Write-Host "  Nenhum colaborador no cadastro mestre." -ForegroundColor Yellow
+                } else {
+                    Write-Host "  CODIGO     NOME                              SETOR                 FUNCAO" -ForegroundColor Cyan
+                    Write-Host "  --------  --------------------------------  --------------------  --------------" -ForegroundColor DarkGray
+                    foreach ($c in $colaboradores) {
+                        $status = if ($c.Ativo -eq "Sim") { "" } else { "  (INATIVO)" }
+                        Write-Host "  " -NoNewline
+                        Write-Host "$($c.Codigo)" -NoNewline -ForegroundColor Green
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $c.Nome 32)".PadRight(32) -NoNewline -ForegroundColor White
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $c.Campo3 20)".PadRight(20) -NoNewline -ForegroundColor Cyan
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $c.Campo4 14)".PadRight(14) -NoNewline -ForegroundColor DarkGray
+                        Write-Host "$status" -ForegroundColor Red
+                    }
+                }
+                Pausar-Tela
+            }
+            "2" {
+                Write-Host ""
+                Write-Host " -- NOVO COLABORADOR --" -ForegroundColor Green
+                $nome = ""
+                while ([string]::IsNullOrWhiteSpace($nome)) {
+                    $nome = Read-Host "   Nome completo"
+                    if ($null -eq $nome) { $nome = ""; break }
+                }
+                if ([string]::IsNullOrWhiteSpace($nome)) { continue }
+                $setor = Read-Host "   Setor"
+                $funcao = Read-Host "   Funcao / Cargo"
+                $email = Read-Host "   E-mail"
+                $telefone = Read-Host "   Telefone"
+                $novo = [PSCustomObject]@{
+                    Codigo = (Obter-ProximoCodigoMestre -registros $colaboradores -prefixo "COL")
+                    Nome = $nome.Trim()
+                    Campo3 = $(if ($setor) { $setor.Trim() } else { "N/A" })
+                    Campo4 = $(if ($funcao) { $funcao.Trim() } else { "N/A" })
+                    Campo5 = $(if ($email) { $email.Trim() } else { "N/A" })
+                    Campo6 = $(if ($telefone) { $telefone.Trim() } else { "N/A" })
+                    Ativo = "Sim"
+                }
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoColaboradores -registros (@($colaboradores) + $novo) -cabecalho @("Codigo", "Nome", "Setor", "Funcao", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Colaborador $($novo.Codigo) cadastrado." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "3" {
+                if ($colaboradores.Count -eq 0) { Write-Host " [!] Nenhum colaborador cadastrado." -ForegroundColor Yellow; Pausar-Tela; continue }
+                $escolha = Read-Host " Digite o codigo (COL-0001) ou o nome do colaborador"
+                $sel = $colaboradores | Where-Object { $_.Codigo -match "(?i)$($escolha.Trim())" -or $_.Nome -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+                if (!$sel) { Write-Host " [!] Colaborador nao encontrado." -ForegroundColor Red; Pausar-Tela; continue }
+                Write-Host ""
+                Write-Host "   Editando: $($sel.Codigo) - $($sel.Nome)" -ForegroundColor Cyan
+                $nome = Read-Host "   Nome [$($sel.Nome)]"
+                $setor = Read-Host "   Setor [$($sel.Campo3)]"
+                $funcao = Read-Host "   Funcao [$($sel.Campo4)]"
+                $email = Read-Host "   E-mail [$($sel.Campo5)]"
+                $telefone = Read-Host "   Telefone [$($sel.Campo6)]"
+                if ($nome) { $sel.Nome = $nome.Trim() }
+                if ($setor) { $sel.Campo3 = $setor.Trim() }
+                if ($funcao) { $sel.Campo4 = $funcao.Trim() }
+                if ($email) { $sel.Campo5 = $email.Trim() }
+                if ($telefone) { $sel.Campo6 = $telefone.Trim() }
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoColaboradores -registros $colaboradores -cabecalho @("Codigo", "Nome", "Setor", "Funcao", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Colaborador atualizado." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "4" {
+                if ($colaboradores.Count -eq 0) { Write-Host " [!] Nenhum colaborador cadastrado." -ForegroundColor Yellow; Pausar-Tela; continue }
+                $escolha = Read-Host " Digite o codigo (COL-0001) ou o nome do colaborador"
+                $sel = $colaboradores | Where-Object { $_.Codigo -match "(?i)$($escolha.Trim())" -or $_.Nome -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+                if (!$sel) { Write-Host " [!] Collaborador nao encontrado." -ForegroundColor Red; Pausar-Tela; continue }
+                $novoStatus = if ($sel.Ativo -eq "Sim") { "Nao" } else { "Sim" }
+                $sel.Ativo = $novoStatus
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoColaboradores -registros $colaboradores -cabecalho @("Codigo", "Nome", "Setor", "Funcao", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Status de $($sel.Nome) alterado para '$novoStatus'." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "5" {
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                Write-Host " |                    >>> FORNECEDORES CADASTRADOS <<<                  |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                if ($fornecedores.Count -eq 0) {
+                    Write-Host "  Nenhum fornecedor no cadastro mestre." -ForegroundColor Yellow
+                } else {
+                    Write-Host "  CODIGO     RAZAO SOCIAL                      CNPJ                 CONTATO" -ForegroundColor Cyan
+                    Write-Host "  --------  --------------------------------  -------------------  --------------" -ForegroundColor DarkGray
+                    foreach ($f in $fornecedores) {
+                        $status = if ($f.Ativo -eq "Sim") { "" } else { "  (INATIVO)" }
+                        Write-Host "  " -NoNewline
+                        Write-Host "$($f.Codigo)" -NoNewline -ForegroundColor Green
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $f.Nome 32)".PadRight(32) -NoNewline -ForegroundColor White
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $f.Campo3 19)".PadRight(19) -NoNewline -ForegroundColor Cyan
+                        Write-Host "  " -NoNewline
+                        Write-Host "$(Cortar-Texto $f.Campo4 14)".PadRight(14) -NoNewline -ForegroundColor DarkGray
+                        Write-Host "$status" -ForegroundColor Red
+                    }
+                }
+                Pausar-Tela
+            }
+            "6" {
+                Write-Host ""
+                Write-Host " -- NOVO FORNECEDOR --" -ForegroundColor Green
+                $razao = ""
+                while ([string]::IsNullOrWhiteSpace($razao)) {
+                    $razao = Read-Host "   Razao social / nome do fornecedor"
+                    if ($null -eq $razao) { $razao = ""; break }
+                }
+                if ([string]::IsNullOrWhiteSpace($razao)) { continue }
+                $cnpj = Read-Host "   CNPJ"
+                $contato = Read-Host "   Contato"
+                $email = Read-Host "   E-mail"
+                $telefone = Read-Host "   Telefone"
+                $novo = [PSCustomObject]@{
+                    Codigo = (Obter-ProximoCodigoMestre -registros $fornecedores -prefixo "FOR")
+                    Nome = $razao.Trim()
+                    Campo3 = $(if ($cnpj) { $cnpj.Trim() } else { "N/A" })
+                    Campo4 = $(if ($contato) { $contato.Trim() } else { "N/A" })
+                    Campo5 = $(if ($email) { $email.Trim() } else { "N/A" })
+                    Campo6 = $(if ($telefone) { $telefone.Trim() } else { "N/A" })
+                    Ativo = "Sim"
+                }
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoFornecedores -registros (@($fornecedores) + $novo) -cabecalho @("Codigo", "Razao_Social", "CNPJ", "Contato", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Fornecedor $($novo.Codigo) cadastrado." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "7" {
+                if ($fornecedores.Count -eq 0) { Write-Host " [!] Nenhum fornecedor cadastrado." -ForegroundColor Yellow; Pausar-Tela; continue }
+                $escolha = Read-Host " Digite o codigo (FOR-0001) ou o nome do fornecedor"
+                $sel = $fornecedores | Where-Object { $_.Codigo -match "(?i)$($escolha.Trim())" -or $_.Nome -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+                if (!$sel) { Write-Host " [!] Fornecedor nao encontrado." -ForegroundColor Red; Pausar-Tela; continue }
+                Write-Host ""
+                Write-Host "   Editando: $($sel.Codigo) - $($sel.Nome)" -ForegroundColor Cyan
+                $razao = Read-Host "   Razao social [$($sel.Nome)]"
+                $cnpj = Read-Host "   CNPJ [$($sel.Campo3)]"
+                $contato = Read-Host "   Contato [$($sel.Campo4)]"
+                $email = Read-Host "   E-mail [$($sel.Campo5)]"
+                $telefone = Read-Host "   Telefone [$($sel.Campo6)]"
+                if ($razao) { $sel.Nome = $razao.Trim() }
+                if ($cnpj) { $sel.Campo3 = $cnpj.Trim() }
+                if ($contato) { $sel.Campo4 = $contato.Trim() }
+                if ($email) { $sel.Campo5 = $email.Trim() }
+                if ($telefone) { $sel.Campo6 = $telefone.Trim() }
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoFornecedores -registros $fornecedores -cabecalho @("Codigo", "Razao_Social", "CNPJ", "Contato", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Fornecedor atualizado." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "8" {
+                if ($fornecedores.Count -eq 0) { Write-Host " [!] Nenhum fornecedor cadastrado." -ForegroundColor Yellow; Pausar-Tela; continue }
+                $escolha = Read-Host " Digite o codigo (FOR-0001) ou o nome do fornecedor"
+                $sel = $fornecedores | Where-Object { $_.Codigo -match "(?i)$($escolha.Trim())" -or $_.Nome -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+                if (!$sel) { Write-Host " [!] Fornecedor nao encontrado." -ForegroundColor Red; Pausar-Tela; continue }
+                $novoStatus = if ($sel.Ativo -eq "Sim") { "Nao" } else { "Sim" }
+                $sel.Ativo = $novoStatus
+                Salvar-MestreCsv -caminho $script:caminhoCatalogoFornecedores -registros $fornecedores -cabecalho @("Codigo", "Razao_Social", "CNPJ", "Contato", "Email", "Telefone", "Ativo")
+                Write-Host "`n [OK] Status de $($sel.Nome) alterado para '$novoStatus'." -ForegroundColor Green
+                Pausar-Tela
+            }
+            "9" {
+                Write-Host " [OK] Abrindo as planilhas mestres..." -ForegroundColor Green
+                try { Invoke-Item $script:caminhoCatalogoColaboradores } catch {}
+                Start-Sleep -Milliseconds 400
+                try { Invoke-Item $script:caminhoCatalogoFornecedores } catch {}
+                Pausar-Tela
+            }
+            "0" { $emGestao = $false }
+            default {
+                Write-Host " Opcao invalida." -ForegroundColor Red
+                Start-Sleep -Milliseconds 700
+            }
+        }
+    }
+}
+# --------------------------------------------------------------------------
+# LEITURA DE CAMPO COM VALOR PADRAO (ENTER MANTEM O PADRAO)
+# Retorna $null se a entrada for encerrada (permite cancelar em lote)
+# --------------------------------------------------------------------------
+function Ler-Campo {
+    param(
+        [string]$rotulo,
+        [string]$padrao = "",
+        [switch]$Obrigatorio
+    )
+    while ($true) {
+        $prompt = if ($padrao -ne "") { "   $rotulo [$padrao]" } else { "   $rotulo" }
+        $v = Read-Host $prompt
+        if ($null -eq $v) { return $null }
+        $v = $v.Trim()
+        if ($v -eq "") {
+            if ($padrao -ne "") { return $padrao }
+            if ($Obrigatorio) {
+                Write-Host "   (!) Campo obrigatorio. Digite um valor." -ForegroundColor Red
+                continue
+            }
+            return ""
+        }
+        return $v
+    }
+}
+
+# --------------------------------------------------------------------------
+# NOVO CADASTRO DE BEM IMOBILIZADO
+# --------------------------------------------------------------------------
+function Iniciar-CadastroBemPatrimonial {
+    param([array]$registrosAtuais, [string]$caminhoCsv)
+
+    if (!$script:contextoAtivos) { $script:contextoAtivos = @{} }
+    $ctx = $script:contextoAtivos
+
+    $catalogo = Obter-CatalogoAtivos
+    $categorias = Obter-CategoriasCatalogo -catalogo $catalogo
+
+    $colaboradoresMestre = Obter-MestreCsv -caminho $script:caminhoCatalogoColaboradores
+    $fornecedoresMestre  = Obter-MestreCsv -caminho $script:caminhoCatalogoFornecedores
+
+    $listaResponsaveis = @()
+    foreach ($c in $colaboradoresMestre) { if ($c.Ativo -eq "Sim" -and $c.Nome) { $listaResponsaveis += $c.Nome } }
+    $listaFornecedores = @()
+    foreach ($f in $fornecedoresMestre) { if ($f.Ativo -eq "Sim" -and $f.Nome) { $listaFornecedores += $f.Nome } }
+
+    # ==========================================================================
+    # ESCOLHA DO MODO DE CADASTRO
+    # ==========================================================================
+    try { Clear-Host } catch {}
+    Exibir-LogoPrincipal
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host " |            >>> MODULO 1 - NOVO CADASTRO DE BEM <<<                   |" -ForegroundColor Yellow
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host "  [1] CADASTRO COMPLETO - preencher todos os 15 campos da ficha" -ForegroundColor Green
+    Write-Host "  [2] CADASTRO RAPIDO   - herda setor/responsavel/situacao (lote)" -ForegroundColor Cyan
+    Write-Host "  [0] Voltar ao Módulo 1" -ForegroundColor Gray
+    Write-Host ""
+    $modo = Ler-OpcaoOuEsc -prompt " Escolha o modo de cadastro" -valorPadrao "2"
+    if ($modo.Trim() -eq "0") { return }
+    $modoRapido = ($modo.Trim() -eq "2")
+
+    $contador = 0
+    while ($true) {
+        $contador++
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        $tituloModo = if ($modoRapido) { "CADASTRO RAPIDO" } else { "CADASTRO COMPLETO" }
+        Write-Host " |     >>> $tituloModo - BEM #$contador - PATRIMONIO <<<             |" -ForegroundColor Yellow
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host "  Proximo tombamento disponivel: " -NoNewline -ForegroundColor Gray
+        $tombamentoSugerido = Obter-ProximoPatrimonio -registros $registrosAtuais
+        Write-Host "$tombamentoSugerido" -ForegroundColor Green
+        Write-Host ""
+
+        $cancelar = $false
+
+        # ------------------------------------------------------------------
+        # [1] CATEGORIA DO BEM
+        # ------------------------------------------------------------------
+        $categoriaBem = $ctx["Categoria"]
+        if ($categorias.Count -gt 0) {
+            $opc = Selecionar-Opcao -titulo "Categoria do Bem" -opcoes $categorias -padrao $categoriaBem -PermiteNovo -rotuloNovo "Digitar outra categoria"
+            if ($null -eq $opc) { $cancelar = $true }
+            elseif ($opc -eq "__NOVO__") {
+                $categoriaBem = Ler-Campo -rotulo "   Nome da nova categoria" -Obrigatorio
+                if ($null -eq $categoriaBem) { $cancelar = $true }
+            } else { $categoriaBem = $opc }
+        } else {
+            $categoriaBem = Ler-Campo -rotulo "Categoria do Bem" -padrao $categoriaBem
+            if ($null -eq $categoriaBem) { $cancelar = $true }
+        }
+        if ($cancelar) { break }
+        Write-Host "   -> Categoria: " -NoNewline -ForegroundColor Gray; Write-Host "$categoriaBem" -ForegroundColor Green
+
+        # ------------------------------------------------------------------
+        # [2] TIPO / SUBTIPO (catalogo)
+        # ------------------------------------------------------------------
+        $tiposDaCategoria = Obter-TiposPorCategoria -catalogo $catalogo -categoria $categoriaBem
+        $tipoEspecifico = $ctx["Tipo"]
+        if ($tiposDaCategoria.Count -gt 0) {
+            $opc = Selecionar-Opcao -titulo "Tipo / Subtipo do Bem" -opcoes $tiposDaCategoria -padrao $tipoEspecifico -PermiteNovo -rotuloNovo "Digitar outro tipo"
+            if ($null -eq $opc) { $cancelar = $true }
+            elseif ($opc -eq "__NOVO__") {
+                $tipoEspecifico = Ler-Campo -rotulo "   Novo tipo" -Obrigatorio
+                if ($null -eq $tipoEspecifico) { $cancelar = $true }
+            } else { $tipoEspecifico = $opc }
+        } else {
+            $tipoEspecifico = Ler-Campo -rotulo "Tipo / Subtipo do Bem" -padrao $tipoEspecifico
+            if ($null -eq $tipoEspecifico) { $cancelar = $true }
+        }
+        if ($cancelar) { break }
+        Write-Host "   -> Tipo: " -NoNewline -ForegroundColor Gray; Write-Host "$tipoEspecifico" -ForegroundColor Green
+
+        # Sugestoes vindas do catalogo
+        $itemCatalogo = $catalogo | Where-Object { $_.Categoria -eq $categoriaBem -and $_.Tipo_Especifico -eq $tipoEspecifico } | Select-Object -First 1
+        $nomeSugerido = if ($itemCatalogo) { $itemCatalogo.Nome_Bem_Produto } else { "" }
+        $setorSugerido = if ($itemCatalogo) { $itemCatalogo.Setor_Sugerido } else { "" }
+
+        # ------------------------------------------------------------------
+        # [3] NOME DO BEM IMOBILIZADO / PRODUTO
+        # ------------------------------------------------------------------
+        $nomeBem = Ler-Campo -rotulo "Nome do Bem Imobilizado / Produto" -padrao $nomeSugerido -Obrigatorio
+        if ($null -eq $nomeBem) { $cancelar = $true; break }
+
+        # ------------------------------------------------------------------
+        # [4] CODIGO / TOMBAMENTO (imutavel) - validacao imediata
+        # ------------------------------------------------------------------
+        $codigoTombamento = Ler-Campo -rotulo "Codigo / Tombamento" -padrao $tombamentoSugerido -Obrigatorio
+        if ($null -eq $codigoTombamento) { $cancelar = $true; break }
+
+        $dupTombamento = Testar-DuplicidadeBem -registros $registrosAtuais -codigoTombamento $codigoTombamento -crmSerial ""
+        if ($dupTombamento) {
+            Write-Host ""
+            Write-Host " [!] Este codigo de tombamento JA EXISTE: " -NoNewline -ForegroundColor Red
+            Write-Host "$($dupTombamento.RegistroExistente.Codigo_Tombamento) - $($dupTombamento.RegistroExistente.Nome_Bem_Produto)" -ForegroundColor Yellow
+            Write-Host "     [1] Usar o proximo tombamento livre ($tombamentoSugerido)" -ForegroundColor Green
+            Write-Host "     [2] Manter este codigo (sera tratado como duplicidade no final)" -ForegroundColor Yellow
+            Write-Host "     [0] Cancelar o cadastro" -ForegroundColor Gray
+            $opcDup = Read-Host "     Escolha [1]"
+            if ($null -eq $opcDup) { $cancelar = $true; break }
+            if ($opcDup.Trim() -eq "0") { $cancelar = $true; break }
+            if ($opcDup.Trim() -eq "1") {
+                $codigoTombamento = $tombamentoSugerido
+                Write-Host "   -> Tombamento ajustado para: $codigoTombamento" -ForegroundColor Green
+            }
+        }
+        Write-Host "   -> Tombamento: " -NoNewline -ForegroundColor Gray; Write-Host "$codigoTombamento" -ForegroundColor Green
+
+        # ------------------------------------------------------------------
+        # [5] NOTA FISCAL
+        # ------------------------------------------------------------------
+        $numeroNotaFiscal = Ler-Campo -rotulo "Numero da Nota Fiscal (a mesma nota cobre varios bens)" -padrao $ctx["NotaFiscal"]
+        if ($null -eq $numeroNotaFiscal) { $cancelar = $true; break }
+        if ($numeroNotaFiscal -eq "") { $numeroNotaFiscal = "N/A" }
+
+        # ------------------------------------------------------------------
+        # [6] CRM / SERIAL
+        # ------------------------------------------------------------------
+        $crmSerial = Ler-Campo -rotulo "CRM / Serial (serial, RFID, codigo de barras)" -padrao $ctx["CRM"]
+        if ($null -eq $crmSerial) { $cancelar = $true; break }
+        if ($crmSerial -eq "") { $crmSerial = "N/A" }
+
+        # ------------------------------------------------------------------
+        # [7] EMPRESA / UNIDADE
+        # ------------------------------------------------------------------
+        $empresa = $ctx["Empresa"]
+        if (!$empresa) { $empresa = $script:empresasAtivosPadrao[0] }
+        if (!$modoRapido) {
+            $opc = Selecionar-Opcao -titulo "Empresa / Unidade" -opcoes $script:empresasAtivosPadrao -padrao $empresa -PermiteNovo -rotuloNovo "Digitar outra empresa"
+            if ($null -eq $opc) { $cancelar = $true; break }
+            if ($opc -eq "__NOVO__") {
+                $empresa = Ler-Campo -rotulo "   Nome da empresa / unidade" -Obrigatorio
+                if ($null -eq $empresa) { $cancelar = $true; break }
+            } else { $empresa = $opc }
+        }
+
+        # ------------------------------------------------------------------
+        # [8] SETOR
+        # ------------------------------------------------------------------
+        $setorAtribuido = $ctx["Setor"]
+        if (!$setorAtribuido -and $setorSugerido) { $setorAtribuido = $setorSugerido }
+        if (!$modoRapido) {
+            $opco = Selecionar-Opcao -titulo "Atribuido a: Setor" -opcoes $script:setoresAtivosPadrao -padrao $setorAtribuido -PermiteNovo -rotuloNovo "Digitar outro setor"
+            if ($null -eq $opc) { $cancelar = $true; break }
+            if ($opc -eq "__NOVO__") {
+                $setorAtribuido = Ler-Campo -rotulo "   Nome do setor" -Obrigatorio
+                if ($null -eq $setorAtribuido) { $cancelar = $true; break }
+            } else { $setorAtribuido = $opc }
+        }
+        if (!$setorAtribuido) { $setorAtribuido = $script:setoresAtivosPadrao[0] }
+        Write-Host "   -> Setor: " -NoNewline -ForegroundColor Gray; Write-Host "$setorAtribuido" -ForegroundColor Green
+
+        # ------------------------------------------------------------------
+        # [9] RESPONSAVEL / COLABORADOR
+        # ------------------------------------------------------------------
+        $responsavel = $ctx["Responsavel"]
+        if (!$modoRapido) {
+            $opc = Selecionar-Opcao -titulo "Responsavel / Colaborador" -opcoes $listaResponsaveis -padrao $responsavel -PermiteNovo -rotuloNovo "Digitar outro responsavel"
+            if ($null -eq $opc) { $cancelar = $true; break }
+            if ($opc -eq "__NOVO__") {
+                $responsavel = Ler-Campo -rotulo "   Nome do responsavel" -Obrigatorio
+                if ($null -eq $responsavel) { $cancelar = $true; break }
+            } else { $responsavel = $opc }
+        }
+        if (!$responsavel) { $responsavel = Ler-Campo -rotulo "   Nome do responsavel" -Obrigatorio; if ($null -eq $responsavel) { $cancelar = $true; break } }
+        Write-Host "   -> Responsavel: " -NoNewline -ForegroundColor Gray; Write-Host "$responsavel" -ForegroundColor White
+
+        # ------------------------------------------------------------------
+        # [10] FORNECEDOR
+        # ------------------------------------------------------------------
+        $fornecedor = $ctx["Fornecedor"]
+        if (!$modoRapido) {
+            $opc = Selecionar-Opcao -titulo "Fornecedor" -opcoes $listaFornecedores -padrao $fornecedor -PermiteNovo -rotuloNovo "Digitar outro fornecedor"
+            if ($null -eq $opc) { $cancelar = $true; break }
+            if ($opc -eq "__NOVO__") {
+                $fornecedor = Ler-Campo -rotulo "   Nome do fornecedor"
+                if ($null -eq $fornecedor) { $cancelar = $true; break }
+            } else { $fornecedor = $opc }
+        }
+        if (!$fornecedor) { $fornecedor = "N/A" }
+        if ($fornecedor -eq "") { $fornecedor = "N/A" }
+
+        # ------------------------------------------------------------------
+        # [11] SITUACAO
+        # ------------------------------------------------------------------
+        $situacao = $ctx["Situacao"]
+        if (!$situacao) { $situacao = $script:situacoesAtivosPadrao[0] }
+        if (!$modoRapido) {
+            $opc = Selecionar-Opcao -titulo "Situacao" -opcoes $script:situacoesAtivosPadrao -padrao $situacao
+            if ($null -eq $opc) { $cancelar = $true; break }
+            $situacao = $opc
+        }
+        Write-Host "   -> Situacao: " -NoNewline -ForegroundColor Gray; Write-Host "$situacao" -ForegroundColor (Obter-CorSituacao $situacao)
+
+        # ------------------------------------------------------------------
+        # [12] DATA DA COMPRA
+        # ------------------------------------------------------------------
+        $dataPadrao = if ($ctx["DataCompra"]) { $ctx["DataCompra"] } else { Get-Date -Format "dd/MM/yyyy" }
+        $dataCompra = ""
+        while ($true) {
+            $dataCompra = Ler-Campo -rotulo "Data da Compra (DD/MM/AAAA)" -padrao $dataPadrao -Obrigatorio
+            if ($null -eq $dataCompra) { $cancelar = $true; break }
+            if (Validar-DataBR $dataCompra) { break }
+            Write-Host "   (!) Data invalida. Use o formato DD/MM/AAAA." -ForegroundColor Red
+        }
+        if ($cancelar) { break }
+
+        # ------------------------------------------------------------------
+        # [13] VALOR DA COMPRA
+        # ------------------------------------------------------------------
+        $valorPadrao = if ($ctx["Valor"]) { $ctx["Valor"] } else { "0,00" }
+        $valorCompra = Normalizar-ValorMoeda (Ler-Campo -rotulo "Valor da Compra (R$)" -padrao $valorPadrao)
+        if ($null -eq $valorCompra) { $cancelar = $true; break }
+
+        # ------------------------------------------------------------------
+        # [14] LOCALIZACAO FISICA / POSTO
+        # ------------------------------------------------------------------
+        $localizacaoPadrao = if ($ctx["Localizacao"]) { $ctx["Localizacao"] } else { $setorAtribuido }
+        $localizacao = Ler-Campo -rotulo "Localizacao Fisica / Posto" -padrao $localizacaoPadrao
+        if ($null -eq $localizacao) { $cancelar = $true; break }
+        if ($localizacao -eq "") { $localizacao = $setorAtribuido }
+
+        # ------------------------------------------------------------------
+        # [15] OBSERVACOES
+        # ------------------------------------------------------------------
+        $observacoes = Ler-Campo -rotulo "Observacoes Adicionais" -padrao $ctx["Observacoes"]
+        if ($null -eq $observacoes) { $cancelar = $true; break }
+        if ($observacoes -eq "") { $observacoes = "N/A" }
+
+        if ($cancelar) { break }
+
+        $dataRegistro = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
+
+        # ======================================================================
+        # RESUMO DA FICHA
+        # ======================================================================
+        $divisoria = "=" * 70
+        $resumoTexto = @(
+            $divisoria,
+            "       INNOVCORE TI - FICHA PATRIMONIAL DO BEM ($empresa)",
+            $divisoria,
+            "  - Nome do Bem:              $nomeBem",
+            "  - Codigo / Tombamento:      $codigoTombamento",
+            "  - Numero da Nota Fiscal:    $numeroNotaFiscal",
+            "  - CRM / Serial:             $crmSerial",
+            "  - Empresa / Unidade:        $empresa",
+            "  - Categoria do Bem:         $categoriaBem",
+            "  - Tipo / Subtipo:           $tipoEspecifico",
+            "  - Atribuido a (Setor):      $setorAtribuido",
+            "  - Responsavel:              $responsavel",
+            "  - Fornecedor:               $fornecedor",
+            "  - Situacao:                 $situacao",
+            "  - Data da Compra:           $dataCompra",
+            "  - Valor da Compra:          R$ $valorCompra",
+            "  - Localizacao Fisica:       $localizacao",
+            "  - Observacoes:              $observacoes",
+            "  - Data do Registro:         $dataRegistro",
+            $divisoria
+        ) -join "`r`n"
+
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host ""
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host " |               FICHA PATRIMONIAL - CONFIRMACAO                       |" -ForegroundColor Yellow
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host "   NOME DO BEM:          " -NoNewline -ForegroundColor Gray; Write-Host "$nomeBem" -ForegroundColor White
+        Write-Host "   CODIGO / TOMBAMENTO:  " -NoNewline -ForegroundColor Gray; Write-Host "$codigoTombamento" -ForegroundColor Green
+        Write-Host "   NOTA FISCAL:          " -NoNewline -ForegroundColor Gray; Write-Host "$numeroNotaFiscal" -ForegroundColor Yellow
+        Write-Host "   CRM / SERIAL:         " -NoNewline -ForegroundColor Gray; Write-Host "$crmSerial" -ForegroundColor Yellow
+        Write-Host "   EMPRESA / UNIDADE:    " -NoNewline -ForegroundColor Gray; Write-Host "$empresa" -ForegroundColor White
+        Write-Host "   CATEGORIA:            " -NoNewline -ForegroundColor Gray; Write-Host "$categoriaBem" -ForegroundColor Cyan
+        Write-Host "   TIPO:                 " -NoNewline -ForegroundColor Gray; Write-Host "$tipoEspecifico" -ForegroundColor Cyan
+        Write-Host "   SETOR:                " -NoNewline -ForegroundColor Gray; Write-Host "$setorAtribuido" -ForegroundColor Green
+        Write-Host "   RESPONSAVEL:          " -NoNewline -ForegroundColor Gray; Write-Host "$responsavel" -ForegroundColor White
+        Write-Host "   FORNECEDOR:           " -NoNewline -ForegroundColor Gray; Write-Host "$fornecedor" -ForegroundColor White
+        Write-Host "   SITUACAO:             " -NoNewline -ForegroundColor Gray; Write-Host "$situacao" -ForegroundColor (Obter-CorSituacao $situacao)
+        Write-Host "   DATA DA COMPRA:       " -NoNewline -ForegroundColor Gray; Write-Host "$dataCompra" -ForegroundColor Yellow
+        Write-Host "   VALOR DA COMPRA:      " -NoNewline -ForegroundColor Gray; Write-Host "R$ $valorCompra" -ForegroundColor Yellow
+        Write-Host "   LOCALIZACAO FISICA:   " -NoNewline -ForegroundColor Gray; Write-Host "$localizacao" -ForegroundColor Green
+        Write-Host "   OBSERVACOES:          " -NoNewline -ForegroundColor Gray; Write-Host "$observacoes" -ForegroundColor White
+        Write-Host "   DATA DO REGISTRO:     " -NoNewline -ForegroundColor Gray; Write-Host "$dataRegistro" -ForegroundColor DarkGray
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+
+        try { Set-Clipboard -Value $resumoTexto } catch { try { $resumoTexto | clip.exe } catch {} }
+        Write-Host ""
+        Write-Host " [OK] Ficha COPIADA para a Area de Transferencia (Ctrl + V)!" -ForegroundColor Green
+
+        # ======================================================================
+        # GRAVACAO
+        # ======================================================================
+        $novoItem = [PSCustomObject]@{
+            Data_Registro              = $dataRegistro
+            Empresa_Unidade           = $empresa
+            Codigo_Tombamento          = $codigoTombamento
+            Numero_Nota_Fiscal         = $numeroNotaFiscal
+            CRM_Serial                 = $crmSerial
+            Categoria_Bem              = $categoriaBem
+            Tipo_Especifico            = $tipoEspecifico
+            Nome_Bem_Produto           = $nomeBem
+            Setor_Atribuido            = $setorAtribuido
+            Responsavel_Colaborador    = $responsavel
+            Fornecedor                 = $fornecedor
+            Situacao                   = $situacao
+            Data_Compra                = $dataCompra
+            Valor_Compra               = $valorCompra
+            Localizacao_Fisica_Posto   = $localizacao
+            Observacoes_Adicionais     = $observacoes
+            Nome_Computador            = "N/A"
+            Processador                = "N/A"
+            Memoria_RAM                = "N/A"
+            Armazenamento              = "N/A"
+            Placa_Video                = "N/A"
+            Sistema_Operacional        = "N/A"
+            IP_Rede                    = "N/A"
+            MAC_Rede                   = "N/A"
+            Bateria                    = "N/A"
+            Android_Versao             = "N/A"
+            Empresa                    = $empresa
+            Patrimonio                 = $codigoTombamento
+            Usuario                    = $responsavel
+            Setor                      = $setorAtribuido
+            Status_Ativo               = $situacao
+            Localizacao                = $localizacao
+            Observacoes                = $observacoes
+        }
+
+        $dupFinal = Testar-DuplicidadeBem -registros $registrosAtuais -codigoTombamento $codigoTombamento -crmSerial $crmSerial
+        if ($dupFinal) {
+            $itemAntigo = $dupFinal.RegistroExistente
+            Write-Host ""
+            Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Yellow
+            Write-Host " |               [!] DUPLICIDADE DETECTADA                           |" -ForegroundColor Yellow
+            Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Yellow
+            Write-Host "   Motivo:             " -NoNewline -ForegroundColor Gray; Write-Host "$($dupFinal.Motivo)" -ForegroundColor Red
+            Write-Host "   Registro Anterior:  " -NoNewline -ForegroundColor Gray; Write-Host "$($itemAntigo.Codigo_Tombamento) - $($itemAntigo.Nome_Bem_Produto) ($($itemAntigo.Setor_Atribuido))" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "   [1] CANCELAR este cadastro (padrao)" -ForegroundColor Gray
+            Write-Host "   [2] MANTER AMBOS e gerar um novo codigo de tombamento" -ForegroundColor Cyan
+            Write-Host "   [3] SOBRESCREVER o cadastro existente" -ForegroundColor Red
+            Write-Host ""
+            $opcDup = Read-Host "   Escolha uma opcao [1]"
+            if ($null -eq $opcDup) { break }
+            if ($opcDup.Trim() -eq "2") {
+                $codigoTombamento = Obter-ProximoPatrimonio -registros $registrosAtuais
+                $novoItem.Codigo_Tombamento = $codigoTombamento
+                $novoItem.Patrimonio = $codigoTombamento
+                Write-Host "   -> Novo codigo de tombamento: $codigoTombamento" -ForegroundColor Green
+            } elseif ($opcDup.Trim() -eq "3") {
+                $listaAtualizada = @($registrosAtuais | Where-Object { $_.Codigo_Tombamento -ne $itemAntigo.Codigo_Tombamento }) + $novoItem
+                Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaAtualizada -BaseAtivos
+                $registrosAtuais = Obter-RegistrosCsv -caminho $caminhoCsv -empresaPadrao "InnovEdu" -setorPadrao "Operacoes e Logistica"
+                Write-Host "`n [OK] Cadastro $codigoTombamento ATUALIZADO com sucesso!" -ForegroundColor Green
+            } else {
+                Write-Host "`n [!] Operacao cancelada. Nenhum dado foi alterado." -ForegroundColor Yellow
+                break
+            }
+        } else {
+            $listaAtualizada = @($registrosAtuais) + $novoItem
+            Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaAtualizada -BaseAtivos
+            $registrosAtuais = Obter-RegistrosCsv -caminho $caminhoCsv -empresaPadrao "InnovEdu" -setorPadrao "Operacoes e Logistica"
+            Write-Host ""
+            Write-Host " [OK] Bem patrimonial cadastrado com sucesso!" -ForegroundColor Green
+            Write-Host "      Tombamento: " -NoNewline -ForegroundColor Gray; Write-Host "$codigoTombamento" -ForegroundColor Green
+            Write-Host "      Arquivo:    " -NoNewline -ForegroundColor Gray; Write-Host "$caminhoCsv" -ForegroundColor Yellow
+        }
+
+        # ======================================================================
+        # MEMORIZAR CONTEXTO PARA O PROXIMO ITEM (modo lote)
+        # ======================================================================
+        $ctx["Categoria"]  = $categoriaBem
+        $ctx["Tipo"]       = $tipoEspecifico
+        $ctx["Empresa"]    = $empresa
+        $ctx["Setor"]      = $setorAtribuido
+        $ctx["Responsavel"] = $responsavel
+        $ctx["Fornecedor"] = $fornecedor
+        $ctx["Situacao"]   = $situacao
+        $ctx["DataCompra"] = $dataCompra
+        $ctx["Valor"]      = $valorCompra
+        $ctx["Localizacao"] = $localizacao
+        $ctx["Observacoes"] = $observacoes
+        $ctx["NotaFiscal"] = $numeroNotaFiscal
+        $ctx["CRM"]        = $crmSerial
+
+        Write-Host ""
+        $continuar = Read-Host " Cadastrar OUTRO bem agora? (S/N) [N]"
+        if ($null -eq $continuar) { break }
+        if ($continuar.Trim() -notmatch '(?i)^s|sim|y|yes$') { break }
+    }
+
+    Write-Host ""
+    Write-Host " [OK] Sessao de cadastro encerrada." -ForegroundColor Green
+    Pausar-Tela
+}
+# --------------------------------------------------------------------------
+# EXIBICAO EM TABELA (adapta a largura do console)
+# --------------------------------------------------------------------------
+function Exibir-TabelaAtivos {
+    param([array]$registros, [int]$limite = 0)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        Write-Host "  Nenhum bem encontrado." -ForegroundColor Yellow
+        return
+    }
+
+    if ($limite -le 0) { $limite = Get-LimiteListagem }
+
+    $total = $registros.Count
+    if ($total -gt $limite) {
+        Write-Host "  Mostrando $limite de $total bens (use a busca ou os filtros para ver o resto)." -ForegroundColor DarkGray
+        $registros = @($registros[0..($limite - 1)])
+    }
+
+    # Calcula as colunas conforme a largura real do terminal
+    $disp = $script:larguraCaixa - 2
+    $wNum = 4; $wTomb = 13; $wNomeMin = 18; $wCat = 17; $wSetor = 19; $wSit = 18; $wVal = 13
+    $usarVal = $true; $usarCat = $true; $usarSet = $true
+    while ($true) {
+        $totalCol = $wNum + $wTomb + $wNomeMin + $wSit + 1
+        if ($usarVal) { $totalCol += $wVal + 1 }
+        if ($usarCat) { $totalCol += $wCat + 1 }
+        if ($usarSet) { $totalCol += $wSetor + 1 }
+        if ($totalCol -le $disp) { break }
+        if ($usarVal) { $usarVal = $false; continue }
+        if ($usarSet) { $usarSet = $false; continue }
+        if ($usarCat) { $usarCat = $false; continue }
+        break
+    }
+    $usado = $wNum + $wTomb + $wNomeMin + $wSit + 1
+    if ($usarVal) { $usado += $wVal + 1 }
+    if ($usarCat) { $usado += $wCat + 1 }
+    if ($usarSet) { $usado += $wSetor + 1 }
+    $wNome = [Math]::Max($wNomeMin, $disp - $usado)
+
+    # Definicao das colunas (a ordem se ajusta ao espaco disponivel)
+    $cols = @()
+    $cols += @{ Cab = "#";         Larg = $wNum;  Tipo = "Num" }
+    $cols += @{ Cab = "TOMBAMENTO"; Larg = $wTomb; Tipo = "Tomb" }
+    $cols += @{ Cab = "NOME DO BEM"; Larg = $wNome; Tipo = "Nome" }
+    if ($usarCat) { $cols += @{ Cab = "CATEGORIA"; Larg = $wCat; Tipo = "Cat" } }
+    if ($usarSet) { $cols += @{ Cab = "SETOR"; Larg = $wSetor; Tipo = "Setor" } }
+    $cols += @{ Cab = "SITUACAO"; Larg = $wSit; Tipo = "Sit" }
+    if ($usarVal) { $cols += @{ Cab = "VALOR"; Larg = $wVal; Tipo = "Val" } }
+
+    # Cabecalho
+    $partesCab = @()
+    foreach ($c in $cols) { $partesCab += ("{0,-$($c.Larg)}" -f $c.Cab) }
+    $cabecalho = ($partesCab -join " ").TrimEnd()
+
+    Write-Host ""
+    Write-Host "  $cabecalho" -ForegroundColor Cyan
+    Write-Host ("  " + ("-" * [Math]::Min($disp, $cabecalho.Length))) -ForegroundColor DarkGray
+
+    $i = 1
+    foreach ($r in $registros) {
+        foreach ($c in $cols) {
+            $valor = switch ($c.Tipo) {
+                "Num"  { "$i" }
+                "Tomb" { $r.Codigo_Tombamento }
+                "Nome" { Cortar-Texto $r.Nome_Bem_Produto $c.Larg }
+                "Cat"  { Cortar-Texto $r.Categoria_Bem $c.Larg }
+                "Setor"{ Cortar-Texto $r.Setor_Atribuido $c.Larg }
+                "Sit"  { Cortar-Texto $r.Situacao $c.Larg }
+                "Val"  { "R$ " + (Formatar-Moeda (Converter-ValorNumerico $r.Valor_Compra)) }
+            }
+            $cor = switch ($c.Tipo) {
+                "Num"  { "Cyan" }
+                "Tomb" { "Green" }
+                "Nome" { "White" }
+                "Cat"  { "Cyan" }
+                "Setor"{ "Green" }
+                "Sit"  { Obter-CorSituacao $r.Situacao }
+                "Val"  { "Yellow" }
+            }
+            Write-Host $valor.PadRight($c.Larg) -NoNewline -ForegroundColor $cor
+            Write-Host " " -NoNewline
+        }
+        Write-Host ""
+        $i++
+    }
+    Write-Host ("  " + ("-" * [Math]::Min($disp, $cabecalho.Length))) -ForegroundColor DarkGray
+    Write-Host "  Total exibido: " -NoNewline -ForegroundColor Gray
+    Write-Host "$($registros.Count)" -ForegroundColor Green
+    if ($total -gt $registros.Count) {
+        Write-Host "  Total na base: " -NoNewline -ForegroundColor Gray
+        Write-Host "$total" -ForegroundColor Green
+    }
+}
+
+# --------------------------------------------------------------------------
+# CONSULTA DE ATIVOS
+# --------------------------------------------------------------------------
+function Menu-ConsultarAtivos {
+    param([array]$registros)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host " |                 >>> CONSULTA DE ATIVOS PATRIMONIAIS <<<              |" -ForegroundColor Yellow
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  Nenhum bem patrimonial cadastrado na base ainda." -ForegroundColor Yellow
+        Write-Host "  Use a opcao [1] do Módulo 1 para cadastrar o primeiro bem." -ForegroundColor Gray
+        Pausar-Tela
+        return
+    }
+
+    $emConsulta = $true
+    while ($emConsulta) {
+        $totalValor = 0.0
+        foreach ($r in $registros) { $totalValor += (Converter-ValorNumerico $r.Valor_Compra) }
+
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host " |                 >>> CONSULTA DE ATIVOS PATRIMONIAIS <<<              |" -ForegroundColor Yellow
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host "  Bens catalogados: " -NoNewline -ForegroundColor Gray; Write-Host "$($registros.Count)" -ForegroundColor Green
+        Write-Host "  Valor total do patrimonio: " -NoNewline -ForegroundColor Gray; Write-Host ("R$ " + (Formatar-Moeda $totalValor)) -ForegroundColor Yellow
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host "  [1] Listar todos os bens" -ForegroundColor White
+        Write-Host "  [2] Filtrar por Setor" -ForegroundColor White
+        Write-Host "  [3] Filtrar por Categoria" -ForegroundColor White
+        Write-Host "  [4] Filtrar por Situacao" -ForegroundColor White
+        Write-Host "  [5] Buscar por tombamento / nome / serial" -ForegroundColor White
+        Write-Host "  [6] Ver ficha completa de um bem" -ForegroundColor Cyan
+        Write-Host "  [0] Voltar ao Módulo 1" -ForegroundColor Gray
+        Write-Host ""
+
+        $opcConsulta = Ler-OpcaoOuEsc -prompt " Escolha a opcao" -valorPadrao "1"
+
+        switch ($opcConsulta.Trim()) {
+            "1" {
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " |                >>> LISTA GERAL DE BENS PATRIMONIAIS <<<             |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                Exibir-TabelaAtivos -registros $registros
+                Pausar-Tela
+            }
+
+            { $_ -in @("2", "3", "4") } {
+                $campo = switch ($opcConsulta.Trim()) {
+                    "2" { "Setor_Atribuido" }
+                    "3" { "Categoria_Bem" }
+                    "4" { "Situacao" }
+                }
+                $rotulo = switch ($opcConsulta.Trim()) {
+                    "2" { "Setor" }
+                    "3" { "Categoria" }
+                    "4" { "Situacao" }
+                }
+                $valores = @()
+                foreach ($r in $registros) {
+                    $v = $r.$campo
+                    if ($v -and $v -ne "N/A" -and $valores -notcontains $v) { $valores += $v }
+                }
+
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " |                >>> FILTRAR ATIVOS POR $($rotulo.ToUpper()) <<<              |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                $opc = Selecionar-Opcao -titulo "Selecione o $rotulo" -opcoes $valores
+                if ($null -eq $opc) { Pausar-Tela; break }
+                $encontrados = @($registros | Where-Object { $_.$campo -eq $opc })
+                Write-Host ""
+                Write-Host " Resultado: " -NoNewline -ForegroundColor Gray
+                Write-Host "$($encontrados.Count)" -ForegroundColor Green
+                Write-Host " bem(ns) em '$opc'" -ForegroundColor Cyan
+                Exibir-TabelaAtivos -registros $encontrados
+                Pausar-Tela
+            }
+
+            "5" {
+                Write-Host ""
+                $termo = Read-Host " Digite o termo (tombamento, nome do bem, tipo ou serial)"
+                if ($null -eq $termo) { Pausar-Tela; break }
+                if (![string]::IsNullOrWhiteSpace($termo)) {
+                    $t = [regex]::Escape($termo.Trim())
+                    $encontrados = @($registros | Where-Object {
+                        $_.Codigo_Tombamento -match "(?i)$t" -or
+                        $_.Nome_Bem_Produto -match "(?i)$t" -or
+                        $_.CRM_Serial -match "(?i)$t" -or
+                        $_.Tipo_Especifico -match "(?i)$t" -or
+                        $_.Responsavel_Colaborador -match "(?i)$t"
+                    })
+                    Write-Host ""
+                    Write-Host " Resultados: " -NoNewline -ForegroundColor Gray
+                    Write-Host "$($encontrados.Count)" -ForegroundColor Green
+                    Exibir-TabelaAtivos -registros $encontrados
+                }
+                Pausar-Tela
+            }
+
+            "6" {
+                Write-Host ""
+                $escolha = Read-Host " Numero do bem (1 a $($registros.Count)) ou codigo de tombamento"
+                if ($null -eq $escolha) { Pausar-Tela; break }
+                $selecionado = $null
+                $num = 0
+                if ([int]::TryParse($escolha.Trim(), [ref]$num) -and $num -ge 1 -and $num -le $registros.Count) {
+                    $selecionado = $registros[$num - 1]
+                } elseif (![string]::IsNullOrWhiteSpace($escolha)) {
+                    $selecionado = $registros | Where-Object { $_.Codigo_Tombamento -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+                }
+
+                if ($selecionado) {
+                    try { Clear-Host } catch {}
+                    Exibir-LogoPrincipal
+                    Write-Host " |                >>> FICHA PATRIMONIAL COMPLETA <<<                   |" -ForegroundColor Yellow
+                    Write-Host " +======================================================================+" -ForegroundColor Cyan
+                    Write-Host "   NOME DO BEM:            " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Nome_Bem_Produto)" -ForegroundColor White
+                    Write-Host "   CODIGO / TOMBAMENTO:    " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Codigo_Tombamento)" -ForegroundColor Green
+                    Write-Host "   NOTA FISCAL:            " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Numero_Nota_Fiscal)" -ForegroundColor Yellow
+                    Write-Host "   CRM / SERIAL:           " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.CRM_Serial)" -ForegroundColor Yellow
+                    Write-Host "   EMPRESA / UNIDADE:      " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Empresa_Unidade)" -ForegroundColor White
+                    Write-Host "   CATEGORIA DO BEM:       " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Categoria_Bem)" -ForegroundColor Cyan
+                    Write-Host "   TIPO / SUBTIPO:         " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Tipo_Especifico)" -ForegroundColor Cyan
+                    Write-Host "   ATRIBUIDO A (SETOR):    " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Setor_Atribuido)" -ForegroundColor Green
+                    Write-Host "   RESPONSAVEL:            " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Responsavel_Colaborador)" -ForegroundColor White
+                    Write-Host "   FORNECEDOR:             " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Fornecedor)" -ForegroundColor White
+                    Write-Host "   SITUACAO:               " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Situacao)" -ForegroundColor (Obter-CorSituacao $selecionado.Situacao)
+                    Write-Host "   DATA DA COMPRA:         " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Data_Compra)" -ForegroundColor Yellow
+                    Write-Host "   VALOR DA COMPRA:        " -NoNewline -ForegroundColor Gray; Write-Host ("R$ " + (Formatar-Moeda (Converter-ValorNumerico $selecionado.Valor_Compra))) -ForegroundColor Yellow
+                    Write-Host "   LOCALIZACAO FISICA:     " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Localizacao_Fisica_Posto)" -ForegroundColor Green
+                    Write-Host "   OBSERVACOES:            " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Observacoes_Adicionais)" -ForegroundColor White
+                    Write-Host "   DATA DO REGISTRO:       " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Data_Registro)" -ForegroundColor DarkGray
+                    Write-Host " +======================================================================+" -ForegroundColor Cyan
+                } else {
+                    Write-Host " [!] Bem nao encontrado." -ForegroundColor Red
+                }
+                Pausar-Tela
+            }
+
+            "0" { $emConsulta = $false }
+            default {
+                Write-Host " Opcao invalida." -ForegroundColor Red
+                Start-Sleep -Milliseconds 700
+            }
+        }
+    }
+}
+
+# --------------------------------------------------------------------------
+# EDICAO DE ATIVO
+# --------------------------------------------------------------------------
+function Menu-EditarAtivo {
+    param([array]$registros, [string]$caminhoCsv)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        Write-Host " [!] Nenhum bem cadastrado para editar." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    Write-Host ""
+    $escolha = Read-Host " Numero do bem (1 a $($registros.Count)) ou codigo de tombamento"
+    if ($null -eq $escolha) { return }
+    $selecionado = $null
+    $num = 0
+    if ([int]::TryParse($escolha.Trim(), [ref]$num) -and $num -ge 1 -and $num -le $registros.Count) {
+        $selecionado = $registros[$num - 1]
+    } elseif (![string]::IsNullOrWhiteSpace($escolha)) {
+        $selecionado = $registros | Where-Object { $_.Codigo_Tombamento -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+    }
+
+    if (!$selecionado) {
+        Write-Host " [!] Bem nao encontrado." -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    try { Clear-Host } catch {}
+    Exibir-LogoPrincipal
+    Write-Host " |                >>> ATUALIZACAO DE BEM PATRIMONIAL <<<                 |" -ForegroundColor Yellow
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host "   BEM: " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Codigo_Tombamento) - $($selecionado.Nome_Bem_Produto)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "   [1] Situacao            (Atual: $($selecionado.Situacao))" -ForegroundColor White
+    Write-Host "   [2] Setor               (Atual: $($selecionado.Setor_Atribuido))" -ForegroundColor White
+    Write-Host "   [3] Responsavel         (Atual: $($selecionado.Responsavel_Colaborador))" -ForegroundColor White
+    Write-Host "   [4] Localizacao Fisica  (Atual: $($selecionado.Localizacao_Fisica_Posto))" -ForegroundColor White
+    Write-Host "   [5] Observacoes         (Atual: $($selecionado.Observacoes_Adicionais))" -ForegroundColor White
+    Write-Host "   [6] Nome do Bem         (Atual: $($selecionado.Nome_Bem_Produto))" -ForegroundColor White
+    Write-Host "   [7] Fornecedor          (Atual: $($selecionado.Fornecedor))" -ForegroundColor White
+    Write-Host "   [0] Voltar sem alterar" -ForegroundColor Gray
+    Write-Host ""
+
+    $opc = Ler-OpcaoOuEsc -prompt " Escolha o campo que deseja alterar" -valorPadrao "0"
+    if ($opc.Trim() -eq "0") { return }
+
+    $novoValor = $null
+    switch ($opc.Trim()) {
+        "1" {
+            $novoValor = Selecionar-Opcao -titulo "Nova situacao" -opcoes $script:situacoesAtivosPadrao -padrao $selecionado.Situacao
+        }
+        "2" {
+            $novoValor = Selecionar-Opcao -titulo "Novo setor" -opcoes $script:setoresAtivosPadrao -padrao $selecionado.Setor_Atribuido -PermiteNovo -rotuloNovo "Digitar outro setor"
+            if ($novoValor -eq "__NOVO__") { $novoValor = Ler-Campo -rotulo "   Nome do setor" -Obrigatorio }
+        }
+        "3" {
+            $novoValor = Ler-Campo -rotulo "   Novo responsavel" -padrao $selecionado.Responsavel_Colaborador
+        }
+        "4" {
+            $novoValor = Ler-Campo -rotulo "   Nova localizacao fisica" -padrao $selecionado.Localizacao_Fisica_Posto
+        }
+        "5" {
+            $novoValor = Ler-Campo -rotulo "   Novas observacoes" -padrao $selecionado.Observacoes_Adicionais
+        }
+        "6" {
+            $novoValor = Ler-Campo -rotulo "   Novo nome do bem" -padrao $selecionado.Nome_Bem_Produto -Obrigatorio
+        }
+        "7" {
+            $novoValor = Ler-Campo -rotulo "   Novo fornecedor" -padrao $selecionado.Fornecedor
+        }
+        default { $novoValor = $null }
+    }
+
+    if ($null -eq $novoValor -or $novoValor -eq "") {
+        Write-Host "`n [!] Nenhuma alteracao realizada." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    $listaAtualizada = @()
+    foreach ($r in $registros) {
+        if ($r.Codigo_Tombamento -eq $selecionado.Codigo_Tombamento) {
+            switch ($opc.Trim()) {
+                "1" { $r.Situacao = $novoValor; $r.Status_Ativo = $novoValor }
+                "2" { $r.Setor_Atribuido = $novoValor; $r.Setor = $novoValor }
+                "3" { $r.Responsavel_Colaborador = $novoValor; $r.Usuario = $novoValor }
+                "4" { $r.Localizacao_Fisica_Posto = $novoValor; $r.Localizacao = $novoValor }
+                "5" { $r.Observacoes_Adicionais = $novoValor; $r.Observacoes = $novoValor }
+                "6" { $r.Nome_Bem_Produto = $novoValor }
+                "7" { $r.Fornecedor = $novoValor }
+            }
+        }
+        $listaAtualizada += $r
+    }
+
+    Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaAtualizada -BaseAtivos
+    Write-Host "`n [OK] Bem $($selecionado.Codigo_Tombamento) atualizado com sucesso!" -ForegroundColor Green
+    Pausar-Tela
+}
+
+# --------------------------------------------------------------------------
+# EXCLUSAO DE ATIVOS (com backup automatico)
+# --------------------------------------------------------------------------
+function Excluir-BensAtivos {
+    param([array]$registros, [string]$caminhoCsv)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        Write-Host " [!] Nenhum bem cadastrado para excluir." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    Write-Host ""
+    Write-Host " Digite o numero do bem (1 a $($registros.Count)), o codigo de tombamento ou 'T' para listar:" -NoNewline -ForegroundColor Yellow
+    $escolha = Read-Host "   Numero, codigo do tombamento ou T para listar"
+    if ($null -eq $escolha) { return }
+
+    $escolha = $escolha.Trim()
+    if ($escolha -eq "" -or $escolha -eq "T") {
+        Exibir-TabelaAtivos -registros $registros
+        Write-Host ""
+        $escolha = Read-Host " Numero ou codigo do bem a excluir"
+        if ($null -eq $escolha) { return }
+        $escolha = $escolha.Trim()
+    }
+
+    $alvos = @()
+    $num = 0
+    if ([int]::TryParse($escolha, [ref]$num) -and $num -ge 1 -and $num -le $registros.Count) {
+        $alvos = @($registros[$num - 1])
+    } elseif ($escolha -ne "") {
+        $alvos = @($registros | Where-Object { $_.Codigo_Tombamento -match "(?i)$([regex]::Escape($escolha))" })
+    }
+
+    if ($alvos.Count -eq 0) {
+        Write-Host " [!] Bem nao encontrado." -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    Write-Host ""
+    Write-Host " BEM(S) QUE SERAO EXCLUIDO(S):" -ForegroundColor Red
+    Exibir-TabelaAtivos -registros $alvos
+    Write-Host ""
+    Write-Host " Os valores e o historico serao perdidos da base (backup automatico em Backups\)." -ForegroundColor Yellow
+    $confirma = Read-Host " Digite EXCLUIR para confirmar"
+    if ($null -eq $confirma -or $confirma.Trim().ToUpper() -ne "EXCLUIR") {
+        Write-Host "`n [!] Exclusao cancelada." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    $codigos = @($alvos | ForEach-Object { $_.Codigo_Tombamento })
+    $listaRestante = @()
+    foreach ($r in $registros) {
+        if ($codigos -notcontains $r.Codigo_Tombamento) { $listaRestante += $r }
+    }
+
+    Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaRestante -BaseAtivos
+
+    Write-Host ""
+    Write-Host " [OK] $($alvos.Count) bem(ns) excluido(s) com sucesso!" -ForegroundColor Green
+    foreach ($c in $codigos) { Write-Host "      - $c" -ForegroundColor DarkGray }
+    Pausar-Tela
+}
+
+# --------------------------------------------------------------------------
+# TERMO DE RESPONSABILIDADE E CUSTODIA
+# --------------------------------------------------------------------------
+function Gerar-TermoResponsabilidade {
+    param([array]$registros, [string]$caminhoCsv)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        Write-Host " [!] Nenhum bem cadastrado para gerar termo." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    Write-Host ""
+    $escolha = Read-Host " Numero do bem (1 a $($registros.Count)) ou codigo de tombamento"
+    if ($null -eq $escolha) { return }
+    $selecionado = $null
+    $num = 0
+    if ([int]::TryParse($escolha.Trim(), [ref]$num) -and $num -ge 1 -and $num -le $registros.Count) {
+        $selecionado = $registros[$num - 1]
+    } elseif (![string]::IsNullOrWhiteSpace($escolha)) {
+        $selecionado = $registros | Where-Object { $_.Codigo_Tombamento -match "(?i)$($escolha.Trim())" } | Select-Object -First 1
+    }
+
+    if (!$selecionado) {
+        Write-Host " [!] Bem nao encontrado." -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    $dataTermo = Get-Date -Format "dd/MM/yyyy"
+    $empresa = $selecionado.Empresa_Unidade
+    $nomeArquivo = "Termo_$($selecionado.Codigo_Tombamento)_$($selecionado.Nome_Bem_Produto)".Replace(" ", "_")
+    $nomeArquivo = ($nomeArquivo -replace '[^\w\-]', '_')
+    $caminhoTxt = Join-Path $script:pastaTermos "$nomeArquivo.txt"
+    $caminhoHtml = Join-Path $script:pastaTermos "$nomeArquivo.html"
+
+    if (!(Test-Path $script:pastaTermos)) { try { New-Item -ItemType Directory -Path $script:pastaTermos -Force | Out-Null } catch {} }
+
+    # ---- CONTEUDO TXT ----
+    $d = "=" * 78
+    $l = "-" * 78
+    $txt = @(
+        $d,
+        "            TERMO DE RESPONSABILIDADE E CUSTODIA DE BEM PATRIMONIAL",
+        "             INNOVCORE TI - GESTAO DE ATIVOS E PATRIMONIO (v2.0)",
+        $d,
+        "",
+        " Documento gerado automaticamente em $dataTermo.",
+        " Empresa / Unidade: $empresa",
+        "",
+        $l,
+        " 1. IDENTIFICACAO DO BEM",
+        $l,
+        "    Nome do Bem:              $($selecionado.Nome_Bem_Produto)",
+        "    Codigo / Tombamento:      $($selecionado.Codigo_Tombamento)",
+        "    Categoria do Bem:         $($selecionado.Categoria_Bem)",
+        "    Tipo / Subtipo:           $($selecionado.Tipo_Especifico)",
+        "    Nota Fiscal:              $($selecionado.Numero_Nota_Fiscal)",
+        "    CRM / Serial:             $($selecionado.CRM_Serial)",
+        "    Valor de Aquisicao:       R$ $($selecionado.Valor_Compra)",
+        "    Data de Aquisicao:        $($selecionado.Data_Compra)",
+        "    Fornecedor:               $($selecionado.Fornecedor)",
+        "",
+        $l,
+        " 2. RESPONSABILIDADE E CUSTODIA",
+        $l,
+        "    Setor de Alocacao:        $($selecionado.Setor_Atribuido)",
+        "    Responsavel / Custodiante:$($selecionado.Responsavel_Colaborador)",
+        "    Localizacao Fisica:       $($selecionado.Localizacao_Fisica_Posto)",
+        "    Situacao do Bem:          $($selecionado.Situacao)",
+        "",
+        $l,
+        " 3. COMPROMISSOS DO CUSTODIANTE",
+        $l,
+        "    Declaro ter recebido o bem acima discriminado, em bom estado de",
+        "    conservacao e para uso exclusivo da empresa, comprometendo-me a:",
+        "",
+        "    a) zelar pela integridade e conservacao do bem sob minha custodia;",
+        "    b) nao permitir o uso por terceiros sem autorizacao da gestao;",
+        "    c) comunicar a gestao qualquer avaria, perda ou desvio de finalidade;",
+        "    d) devolver o bem a gesto no momento da solicitacao ou do fim da minha",
+        "       vinculo com a empresa;",
+        "    e) responder por perdas, danos ou avarias causadas por uso indevido.",
+        "",
+        $l,
+        " 4. OBSERVACOES",
+        $l,
+        "    $($selecionado.Observacoes_Adicionais)",
+        "",
+        "======================================================================",
+        "                        ASSINATURAS",
+        "======================================================================",
+        "",
+        "",
+        "    _____________________________________________     ____________________",
+        "    Entregue por (responsavel pela entrega)        Data",
+        "",
+        "",
+        "    _____________________________________________     ____________________",
+        "    Recebido por (custodiante)                     Data",
+        "",
+        "======================================================================",
+        " Documento gerado pelo InnovCore TI v2.0 - $dataTermo",
+        "======================================================================"
+    ) -join "`r`n"
+
+    [System.IO.File]::WriteAllText($caminhoTxt, $txt, $script:utf8ComBOM)
+
+    # ---- CONTEUDO HTML (imprimivel) ----
+    $html = @(
+        '<!DOCTYPE html>',
+        '<html lang="pt-BR"><head><meta charset="utf-8">',
+        '<title>Termo de Responsabilidade - ' + $selecionado.Codigo_Tombamento + '</title>',
+        '<style>',
+        ' body { font-family: Arial, Helvetica, sans-serif; color:#1e293b; font-size:11pt; margin: 24px; }',
+        ' h1 { font-size:15pt; text-align:center; margin:0 0 4px 0; }',
+        ' h2 { font-size:11.5pt; margin:20px 0 6px 0; color:#0369a1; border-left:4px solid #0284c7; padding-left:8px; }',
+        ' .sub { text-align:center; color:#64748b; font-size:9.5pt; margin-bottom:18px; }',
+        ' table { border-collapse:collapse; width:100%; }',
+        ' td { border:1px solid #cbd5e1; padding:6px 8px; font-size:10pt; vertical-align:top; }',
+        ' td.label { background:#f1f5f9; font-weight:bold; width:38%; }',
+        ' .assinatura { margin-top:42px; }',
+        ' .linha { border-top:1px solid #334155; margin:0 30px; padding-top:3px; font-size:9pt; color:#475569; }',
+        ' .obs { font-size:10pt; text-align:justify; }',
+        ' .rodape { margin-top:26px; font-size:8.5pt; color:#94a3b8; text-align:center; border-top:1px solid #e2e8f0; padding-top:8px; }',
+        ' @media print { body { margin: 10mm; } .noprint { display:none; } }',
+        '</style></head><body>',
+        '<h1>TERMO DE RESPONSABILIDADE E CUSTODIA DE BEM PATRIMONIAL</h1>',
+        '<div class="sub">INNOVCORE TI - GESTAO DE ATIVOS E PATRIMONIO &nbsp;|&nbsp; ' + $empresa + ' &nbsp;|&nbsp; Emitido em ' + $dataTermo + '</div>',
+        '<h2>1. Identificacao do Bem</h2>',
+        '<table>',
+        '<tr><td class="label">Nome do Bem</td><td>' + $selecionado.Nome_Bem_Produto + '</td></tr>',
+        '<tr><td class="label">Codigo / Tombamento</td><td>' + $selecionado.Codigo_Tombamento + '</td></tr>',
+        '<tr><td class="label">Categoria / Tipo</td><td>' + $selecionado.Categoria_Bem + ' / ' + $selecionado.Tipo_Especifico + '</td></tr>',
+        '<tr><td class="label">Nota Fiscal</td><td>' + $selecionado.Numero_Nota_Fiscal + '</td></tr>',
+        '<tr><td class="label">CRM / Serial</td><td>' + $selecionado.CRM_Serial + '</td></tr>',
+        '<tr><td class="label">Valor de Aquisicao</td><td>R$ ' + $selecionado.Valor_Compra + '</td></tr>',
+        '<tr><td class="label">Data de Aquisicao</td><td>' + $selecionado.Data_Compra + '</td></tr>',
+        '<tr><td class="label">Fornecedor</td><td>' + $selecionado.Fornecedor + '</td></tr>',
+        '</table>',
+        '<h2>2. Responsabilidade e Custodia</h2>',
+        '<table>',
+        '<tr><td class="label">Setor de Alocacao</td><td>' + $selecionado.Setor_Atribuido + '</td></tr>',
+        '<tr><td class="label">Responsavel / Custodiante</td><td>' + $selecionado.Responsavel_Colaborador + '</td></tr>',
+        '<tr><td class="label">Localizacao Fisica</td><td>' + $selecionado.Localizacao_Fisica_Posto + '</td></tr>',
+        '<tr><td class="label">Situacao do Bem</td><td>' + $selecionado.Situacao + '</td></tr>',
+        '</table>',
+        '<h2>3. Compromissos do Custodiante</h2>',
+        '<p class="obs">Declaro ter recebido o bem acima discriminado, em bom estado de conservacao e para uso exclusivo da empresa, comprometendo-me a: (a) zelar pela integridade e conservacao do bem sob minha custodia; (b) nao permitir o uso por terceiros sem autorizacao da gestao; (c) comunicar a gestao qualquer avaria, perda ou desvio de finalidade; (d) devolver o bem a gesto no momento da solicitacao ou do fim do meu vinculo com a empresa; (e) responder por perdas, danos ou avarias causadas por uso indevido.</p>',
+        '<h2>4. Observacoes</h2>',
+        '<p class="obs">' + $selecionado.Observacoes_Adicionais + '</p>',
+        '<div class="assinatura">',
+        '<div class="linha">&nbsp;</div>Entregue por (responsavel pela entrega) &nbsp;&nbsp;&nbsp; Data: ____/____/______',
+        '<br><br>',
+        '<div class="linha">&nbsp;</div>Recebido por (custodiante) &nbsp;&nbsp;&nbsp; Data: ____/____/______',
+        '</div>',
+        '<div class="rodape">Documento gerado automaticamente pelo InnovCore TI v2.0 em ' + $dataTermo + '.</div>',
+        '</body></html>'
+    ) -join "`r`n"
+
+    [System.IO.File]::WriteAllText($caminhoHtml, $html, $script:utf8ComBOM)
+
+    # ---- REGISTRO DE TERMOS EMITIDOS ----
+    $linhaRegistro = "{0};{1};{2};{3};{4}" -f $selecionado.Codigo_Tombamento, $selecionado.Responsavel_Colaborador, $dataTermo, $selecionado.Empresa_Unidade, $nomeArquivo
+    $cabecalhoTermos = "Codigo_Tombamento;Responsavel;Data_Termo;Empresa;Arquivo"
+    $conteudoTermos = $cabecalhoTermos
+    if (Test-Path $script:caminhoTermosEmitidos) {
+        try { $conteudoTermos = [System.IO.File]::ReadAllText($script:caminhoTermosEmitidos, [System.Text.Encoding]::UTF8) } catch {}
+    }
+    if ($conteudoTermos -notmatch [regex]::Escape($selecionado.Codigo_Tombamento)) {
+        [System.IO.File]::WriteAllText($script:caminhoTermosEmitidos, ($conteudoTermos + "`r`n" + $linhaRegistro + "`r`n"), $script:utf8ComBOM)
+    }
+
+    try { Clear-Host } catch {}
+    Exibir-LogoPrincipal
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host " |              TERMO DE RESPONSABILIDADE GERADO COM SUCESSO            |" -ForegroundColor Yellow
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host "   Bem:          " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Codigo_Tombamento) - $($selecionado.Nome_Bem_Produto)" -ForegroundColor White
+    Write-Host "   Responsavel:  " -NoNewline -ForegroundColor Gray; Write-Host "$($selecionado.Responsavel_Colaborador)" -ForegroundColor White
+    Write-Host "   Data:         " -NoNewline -ForegroundColor Gray; Write-Host "$dataTermo" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "   Arquivos gerados em: " -ForegroundColor Gray
+    Write-Host "     $caminhoTxt" -ForegroundColor Cyan
+    Write-Host "     $caminhoHtml" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "   [1] Abrir o termo em HTML (formatado, pronto para imprimir)" -ForegroundColor Green
+    Write-Host "   [2] Abrir o termo em TXT" -ForegroundColor Cyan
+    Write-Host "   [0] Voltar ao Módulo 1" -ForegroundColor Gray
+    Write-Host ""
+    $abrir = Read-Host " Escolha [1]"
+    if ($null -ne $abrir) {
+        if ($abrir.Trim() -eq "1") { try { Invoke-Item $caminhoHtml } catch {} }
+        elseif ($abrir.Trim() -eq "2") { try { Invoke-Item $caminhoTxt } catch {} }
+    }
+    Pausar-Tela
+}
+# --------------------------------------------------------------------------
+# IMPORTACAO DE PLANILHA (CADASTRO EM LOTE VIA CSV)
+# --------------------------------------------------------------------------
+function Gerar-ModeloImportacao {
+    param([string]$caminho)
+    $pasta = [System.IO.Path]::GetDirectoryName($caminho)
+    if ($pasta -and !(Test-Path $pasta)) { try { New-Item -ItemType Directory -Path $pasta -Force | Out-Null } catch {} }
+    $exemplo1 = "19/10/2026;InnovEdu;PAT-0001;NF-129480;N/A;Moveis e Escritorio;Cadeira;Cadeira Presidente;Operacoes e Logistica;Fulano de Tal;FOR-0001;Ativo/Operacional;19/10/2026;750,00;Sala 101 - Posto 01;EXEMPLO - apague esta linha;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A"
+    $exemplo2 = "19/10/2026;InnovEdu;PAT-0002;NF-129480;N/A;Moveis e Escritorio;Cadeira;Cadeira Presidente;Operacoes e Logistica;Fulano de Tal;FOR-0001;Ativo/Operacional;19/10/2026;750,00;Sala 101 - Posto 02;EXEMPLO - apague esta linha;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A;N/A"
+    [System.IO.File]::WriteAllText($caminho, ($script:cabecalhoCsvString + "`r`n" + $exemplo1 + "`r`n" + $exemplo2 + "`r`n"), $script:utf8ComBOM)
+    return $caminho
+}
+
+function Importar-AtivosPlanilha {
+    param([array]$registrosAtuais, [string]$caminhoCsv)
+
+    Write-Host ""
+    Write-Host " Digite o caminho da planilha CSV a importar (ENTER = usar o modelo oficial):" -NoNewline -ForegroundColor Yellow
+    $entrada = Read-Host "   Caminho da planilha CSV"
+    if ($null -eq $entrada) { return }
+
+    $caminhoImport = $entrada.Trim()
+    if ($caminhoImport -eq "") {
+        $caminhoImport = $script:caminhoModeloImportacao
+        if (!(Test-Path $caminhoImport)) {
+            $caminhoImport = Gerar-ModeloImportacao -caminho $script:caminhoModeloImportacao
+            Write-Host " [OK] Modelo criado em: $caminhoImport" -ForegroundColor Green
+        }
+    }
+    if (!(Test-Path $caminhoImport)) {
+        Write-Host " [!] Arquivo nao encontrado: $caminhoImport" -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    # ---- LEITURA TOLERANTE (mapeia por nome de coluna) ----
+    $novos = @()
+    $ignorados = @()
+    $tombamentosUsados = @()
+    foreach ($r in $registrosAtuais) { $tombamentosUsados += $r.Codigo_Tombamento }
+    $seriaisUsados = @()
+    foreach ($r in $registrosAtuais) { if ($r.CRM_Serial -and $r.CRM_Serial -ne "N/A") { $seriaisUsados += $r.CRM_Serial } }
+
+    try {
+        $raw = [System.IO.File]::ReadAllText($caminhoImport, [System.Text.Encoding]::UTF8)
+        $linhas = $raw -split "\r?\n" | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+        if ($linhas.Count -lt 2) {
+            Write-Host " [!] A planilha nao possui linhas de dados." -ForegroundColor Red
+            Pausar-Tela
+            return
+        }
+
+        $cabecalho = (($linhas[0] -replace "^\uFEFF", "") -split ';')
+        for ($i = 1; $i -lt $linhas.Count; $i++) {
+            $v = $linhas[$i] -split ';'
+            $linhaNum = $i + 1
+            $campos = @{}
+            for ($k = 0; $k -lt $cabecalho.Count; $k++) {
+                $nome = $cabecalho[$k].Trim()
+                $campos[$nome] = $(if ($k -lt $v.Count) { $v[$k].Trim() } else { "" })
+            }
+
+            $nomeBem = $campos["Nome_Bem_Produto"]
+            if ([string]::IsNullOrWhiteSpace($nomeBem)) {
+                $ignorados += "Linha $linhaNum - Nome do Bem vazio"
+                continue
+            }
+            if ($nomeBem -match '(?i)^exemplo' -or $campos["Observacoes_Adicionais"] -match '(?i)^exemplo') {
+                $ignorados += "Linha $linhaNum - linha de exemplo"
+                continue
+            }
+
+            $tombamento = $campos["Codigo_Tombamento"]
+            if ([string]::IsNullOrWhiteSpace($tombamento)) {
+                $tombamento = Obter-ProximoPatrimonio -registros (@($registrosAtuais) + $novos)
+            }
+            if ($tombamentosUsados -contains $tombamento) {
+                $ignorados += "Linha $linhaNum - tombamento $tombamento ja cadastrado"
+                continue
+            }
+            $serial = $campos["CRM_Serial"]
+            if ($serial -and $serial -ne "N/A" -and $seriaisUsados -contains $serial) {
+                $ignorados += "Linha $linhaNum - serial $serial ja cadastrado"
+                continue
+            }
+
+            $tombamentosUsados += $tombamento
+            if ($serial -and $serial -ne "N/A") { $seriaisUsados += $serial }
+
+            $novos += [PSCustomObject]@{
+                Data_Registro              = (Get-Date -Format "dd/MM/yyyy HH:mm:ss")
+                Empresa_Unidade           = $(if ($campos["Empresa_Unidade"]) { $campos["Empresa_Unidade"] } else { "InnovEdu" })
+                Codigo_Tombamento          = $tombamento
+                Numero_Nota_Fiscal         = $(if ($campos["Numero_Nota_Fiscal"]) { $campos["Numero_Nota_Fiscal"] } else { "N/A" })
+                CRM_Serial                 = $(if ($campos["CRM_Serial"]) { $campos["CRM_Serial"] } else { "N/A" })
+                Categoria_Bem              = $(if ($campos["Categoria_Bem"]) { $campos["Categoria_Bem"] } else { "Outros" })
+                Tipo_Especifico            = $(if ($campos["Tipo_Especifico"]) { $campos["Tipo_Especifico"] } else { "Generico" })
+                Nome_Bem_Produto           = $nomeBem
+                Setor_Atribuido            = $(if ($campos["Setor_Atribuido"]) { $campos["Setor_Atribuido"] } else { "Operacoes e Logistica" })
+                Responsavel_Colaborador    = $(if ($campos["Responsavel_Colaborador"]) { $campos["Responsavel_Colaborador"] } else { "N/A" })
+                Fornecedor                 = $(if ($campos["Fornecedor"]) { $campos["Fornecedor"] } else { "N/A" })
+                Situacao                   = $(if ($campos["Situacao"]) { $campos["Situacao"] } else { "Ativo/Operacional" })
+                Data_Compra                = $(if ($campos["Data_Compra"]) { $campos["Data_Compra"] } else { (Get-Date -Format "dd/MM/yyyy") })
+                Valor_Compra               = (Normalizar-ValorMoeda $campos["Valor_Compra"])
+                Localizacao_Fisica_Posto   = $(if ($campos["Localizacao_Fisica_Posto"]) { $campos["Localizacao_Fisica_Posto"] } else { "N/A" })
+                Observacoes_Adicionais     = $(if ($campos["Observacoes_Adicionais"]) { $campos["Observacoes_Adicionais"] } else { "N/A" })
+                Nome_Computador            = "N/A"
+                Processador                = "N/A"
+                Memoria_RAM                = "N/A"
+                Armazenamento              = "N/A"
+                Placa_Video                = "N/A"
+                Sistema_Operacional        = "N/A"
+                IP_Rede                    = "N/A"
+                MAC_Rede                   = "N/A"
+                Bateria                    = "N/A"
+                Android_Versao             = "N/A"
+                Empresa                    = $(if ($campos["Empresa_Unidade"]) { $campos["Empresa_Unidade"] } else { "InnovEdu" })
+                Patrimonio                 = $tombamento
+                Usuario                    = $(if ($campos["Responsavel_Colaborador"]) { $campos["Responsavel_Colaborador"] } else { "N/A" })
+                Setor                      = $(if ($campos["Setor_Atribuido"]) { $campos["Setor_Atribuido"] } else { "Operacoes e Logistica" })
+                Status_Ativo               = $(if ($campos["Situacao"]) { $campos["Situacao"] } else { "Ativo/Operacional" })
+                Localizacao                = $(if ($campos["Localizacao_Fisica_Posto"]) { $campos["Localizacao_Fisica_Posto"] } else { "N/A" })
+                Observacoes                = $(if ($campos["Observacoes_Adicionais"]) { $campos["Observacoes_Adicionais"] } else { "N/A" })
+            }
+        }
+    } catch {
+        Write-Host " [!] Erro ao ler a planilha: $($_.Exception.Message)" -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    Write-Host ""
+    Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host " |                  PREVIA DA IMPORTACAO                               |" -ForegroundColor Yellow
+    Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "   Arquivo:       " -NoNewline -ForegroundColor Gray; Write-Host "$caminhoImport" -ForegroundColor Yellow
+    Write-Host "   A importar:    " -NoNewline -ForegroundColor Gray; Write-Host "$($novos.Count)" -ForegroundColor Green
+    Write-Host "   Ignorados:     " -NoNewline -ForegroundColor Gray; Write-Host "$($ignorados.Count)" -ForegroundColor Yellow
+    Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+
+    if ($novos.Count -gt 0) {
+        Write-Host ""
+        Write-Host "   Amostra do que sera cadastrado:" -ForegroundColor Cyan
+        Exibir-TabelaAtivos -registros $novos -limite 8
+    }
+
+    if ($ignorados.Count -gt 0) {
+        Write-Host ""
+        Write-Host "   Linhas ignoradas:" -ForegroundColor Yellow
+        foreach ($i in ($ignorados | Select-Object -First 10)) { Write-Host "     - $i" -ForegroundColor DarkGray }
+        if ($ignorados.Count -gt 10) { Write-Host "     ... e mais $($ignorados.Count - 10)" -ForegroundColor DarkGray }
+    }
+
+    Write-Host ""
+    if ($novos.Count -eq 0) {
+        Write-Host " [!] Nada a importar." -ForegroundColor Red
+        Pausar-Tela
+        return
+    }
+
+    $confirma = Read-Host " Confirmar a importacao de $($novos.Count) bem(ns)? (S/N)"
+    if ($null -eq $confirma -or $confirma.Trim() -notmatch '(?i)^s|sim|y|yes$') {
+        Write-Host "`n [!] Importacao cancelada." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    $listaFinal = @($registrosAtuais) + $novos
+    Salvar-RegistrosCsv -caminho $caminhoCsv -registros $listaFinal -BaseAtivos
+
+    Write-Host ""
+    Write-Host " [OK] Importacao concluida! $($novos.Count) bem(ns) cadastrados." -ForegroundColor Green
+    Write-Host "      Arquivo: $caminhoCsv" -ForegroundColor Yellow
+    Pausar-Tela
+}
+
+# --------------------------------------------------------------------------
+# DASHBOARD DO PATRIMONIO
+# --------------------------------------------------------------------------
+function Exibir-Barras {
+    param([array]$itens, [string]$titulo, [int]$top = 10)
+    if (!$itens -or $itens.Count -eq 0) { return }
+    Write-Host ""
+    Write-Host "  $titulo" -ForegroundColor Yellow
+    $maior = 0
+    foreach ($i in $itens) { if ($i.Quantidade -gt $maior) { $maior = $i.Quantidade } }
+    if ($maior -eq 0) { return }
+    $exibidos = if ($itens.Count -gt $top) { @($itens[0..($top - 1)]) } else { $itens }
+    foreach ($i in $exibidos) {
+        $tamanho = [int][Math]::Round(($i.Quantidade / $maior) * 30)
+        if ($tamanho -lt 1) { $tamanho = 1 }
+        $barra = "#" * $tamanho
+        Write-Host "   " -NoNewline
+        Write-Host "$(Cortar-Texto $i.Rotulo 26)".PadRight(26) -NoNewline -ForegroundColor White
+        Write-Host " " -NoNewline
+        Write-Host $barra.PadRight(30) -NoNewline -ForegroundColor Cyan
+        Write-Host " " -NoNewline
+        Write-Host "$($i.Quantidade)" -NoNewline -ForegroundColor Green
+        if ($i.Valor -gt 0) {
+            Write-Host "  (R$ " -NoNewline -ForegroundColor DarkGray
+            Write-Host (Formatar-Moeda $i.Valor) -NoNewline -ForegroundColor Yellow
+            Write-Host ")" -ForegroundColor DarkGray
+        } else {
+            Write-Host ""
+        }
+    }
+}
+
+function Menu-DashboardAtivos {
+    param([array]$registros)
+
+    if (!$registros -or $registros.Count -eq 0) {
+        Write-Host " [!] Nenhum bem cadastrado para compor o dashboard." -ForegroundColor Yellow
+        Pausar-Tela
+        return
+    }
+
+    $totalValor = 0.0
+    $porSituacao = @()
+    $porCategoria = @()
+    $porSetor = @()
+
+    foreach ($r in $registros) {
+        $valor = Converter-ValorNumerico $r.Valor_Compra
+        $totalValor += $valor
+
+        $s = $r.Situacao
+        $itemS = $porSituacao | Where-Object { $_.Rotulo -eq $s } | Select-Object -First 1
+        if (!$itemS) { $itemS = [PSCustomObject]@{ Rotulo = $s; Quantidade = 0; Valor = 0.0 }; $porSituacao += $itemS }
+        $itemS.Quantidade++; $itemS.Valor += $valor
+
+        $c = $r.Categoria_Bem
+        $itemC = $porCategoria | Where-Object { $_.Rotulo -eq $c } | Select-Object -First 1
+        if (!$itemC) { $itemC = [PSCustomObject]@{ Rotulo = $c; Quantidade = 0; Valor = 0.0 }; $porCategoria += $itemC }
+        $itemC.Quantidade++; $itemC.Valor += $valor
+
+        $set = $r.Setor_Atribuido
+        $itemSet = $porSetor | Where-Object { $_.Rotulo -eq $set } | Select-Object -First 1
+        if (!$itemSet) { $itemSet = [PSCustomObject]@{ Rotulo = $set; Quantidade = 0; Valor = 0.0 }; $porSetor += $itemSet }
+        $itemSet.Quantidade++; $itemSet.Valor += $valor
+    }
+
+    $porSituacao = @($porSituacao | Sort-Object -Property Quantidade -Descending)
+    $porCategoria = @($porCategoria | Sort-Object -Property Valor -Descending)
+    $porSetor = @($porSetor | Sort-Object -Property Valor -Descending)
+
+    try { Clear-Host } catch {}
+    Exibir-LogoPrincipal
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host " |                 >>> DASHBOARD DO PATRIMONIO <<<                       |" -ForegroundColor Yellow
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "   TOTAL DE BENS:        " -NoNewline -ForegroundColor Gray; Write-Host "$($registros.Count)" -ForegroundColor Green
+    Write-Host "   VALOR TOTAL:          " -NoNewline -ForegroundColor Gray; Write-Host ("R$ " + (Formatar-Moeda $totalValor)) -ForegroundColor Yellow
+    Write-Host "   VALOR MEDIO POR BEM:  " -NoNewline -ForegroundColor Gray; Write-Host ("R$ " + (Formatar-Moeda ($totalValor / $registros.Count))) -ForegroundColor Yellow
+    Write-Host "   EM OPERACAO:          " -NoNewline -ForegroundColor Gray
+    $ativos = ($porSituacao | Where-Object { $_.Rotulo -match 'Ativo|Operacional' } | Select-Object -First 1)
+    Write-Host "$(if ($ativos) { $ativos.Quantidade } else { 0 })" -ForegroundColor Green
+    Write-Host "   TOMBAMENTO SEGUINTE:  " -NoNewline -ForegroundColor Gray; Write-Host "$(Obter-ProximoPatrimonio -registros $registros)" -ForegroundColor Cyan
+
+    Exibir-Barras -itens $porSituacao -titulo "BENS POR SITUACAO" -top 10
+    Exibir-Barras -itens $porCategoria -titulo "BENS POR CATEGORIA (maior valor)" -top 10
+    Exibir-Barras -itens $porSetor -titulo "BENS POR SETOR (maior valor)" -top 10
+
+    Write-Host ""
+    Write-Host "  MAIORES VALORES" -ForegroundColor Yellow
+    $top5 = @($registros | Sort-Object { -[double]((Converter-ValorNumerico $_.Valor_Compra) -replace ",", ".") } | Select-Object -First 5)
+    foreach ($r in $top5) {
+        Write-Host "   " -NoNewline
+        Write-Host "$($r.Codigo_Tombamento)" -NoNewline -ForegroundColor Green
+        Write-Host " " -NoNewline
+        Write-Host (Cortar-Texto $r.Nome_Bem_Produto 38).PadRight(38) -NoNewline -ForegroundColor White
+        Write-Host ("R$ " + (Formatar-Moeda (Converter-ValorNumerico $r.Valor_Compra))) -ForegroundColor Yellow
+    }
+
+    Write-Host " +======================================================================+" -ForegroundColor Cyan
+    Pausar-Tela
+}
+function Exportar-AtivosPatrimoniais {
+    param(
+        [array]$registros,
+        [string]$tipo = "CSV_EXCEL",
+        [string]$filtroSetor = "",
+        [string]$filtroCategoria = "",
+        [string]$filtroSituacao = "",
+        [switch]$abrirAposExportar
+    )
+
+    if (!(Test-Path $script:pastaExport)) {
+        New-Item -ItemType Directory -Path $script:pastaExport -Force | Out-Null
+    }
+
+    $registrosFiltrados = @($registros)
+    if (![string]::IsNullOrWhiteSpace($filtroSetor)) {
+        $registrosFiltrados = @($registrosFiltrados | Where-Object { $_.Setor_Atribuido -eq $filtroSetor })
+    }
+    if (![string]::IsNullOrWhiteSpace($filtroCategoria)) {
+        $registrosFiltrados = @($registrosFiltrados | Where-Object { $_.Categoria_Bem -eq $filtroCategoria })
+    }
+    if (![string]::IsNullOrWhiteSpace($filtroSituacao)) {
+        $registrosFiltrados = @($registrosFiltrados | Where-Object { $_.Situacao -eq $filtroSituacao })
+    }
+
+    if ($registrosFiltrados.Count -eq 0) {
+        Write-Host " [!] Nenhum bem encontrado para exportacao com os criterios definidos." -ForegroundColor Yellow
+        return $null
+    }
+
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $sufixos = @()
+    if ($filtroSetor) { $sufixos += ($filtroSetor -replace '[^\w]', '_') }
+    if ($filtroCategoria) { $sufixos += ($filtroCategoria -replace '[^\w]', '_') }
+    if ($filtroSituacao) { $sufixos += ($filtroSituacao -replace '[^\w]', '_') }
+    $sufixoFiltro = if ($sufixos.Count -gt 0) { "_$($sufixos -join '_')" } else { "_Geral" }
+
+    $limparCampo = { param($c) if ($null -ne $c) { ($c.ToString() -replace ';', ',') -replace "[\r\n]+", " " } else { "" } }
+
+    switch ($tipo) {
+        "CSV_EXCEL" {
+            $nomeArquivo = "Patrimonio_InnovCore$($sufixoFiltro)_$($timestamp).csv"
+            $caminhoArquivo = Join-Path $script:pastaExport $nomeArquivo
+
+            $linhasExport = [System.Collections.Generic.List[string]]::new()
+            $linhasExport.Add($script:cabecalhoCsvString)
+            foreach ($r in $registrosFiltrados) {
+                $linha = @(
+                    (& $limparCampo $r.Data_Registro),
+                    (& $limparCampo $r.Empresa_Unidade),
+                    (& $limparCampo $r.Codigo_Tombamento),
+                    (& $limparCampo $r.Numero_Nota_Fiscal),
+                    (& $limparCampo $r.CRM_Serial),
+                    (& $limparCampo $r.Categoria_Bem),
+                    (& $limparCampo $r.Tipo_Especifico),
+                    (& $limparCampo $r.Nome_Bem_Produto),
+                    (& $limparCampo $r.Setor_Atribuido),
+                    (& $limparCampo $r.Responsavel_Colaborador),
+                    (& $limparCampo $r.Fornecedor),
+                    (& $limparCampo $r.Situacao),
+                    (& $limparCampo $r.Data_Compra),
+                    (& $limparCampo $r.Valor_Compra),
+                    (& $limparCampo $r.Localizacao_Fisica_Posto),
+                    (& $limparCampo $r.Observacoes_Adicionais),
+                    (& $limparCampo $r.Nome_Computador),
+                    (& $limparCampo $r.Processador),
+                    (& $limparCampo $r.Memoria_RAM),
+                    (& $limparCampo $r.Armazenamento),
+                    (& $limparCampo $r.Placa_Video),
+                    (& $limparCampo $r.Sistema_Operacional),
+                    (& $limparCampo $r.IP_Rede),
+                    (& $limparCampo $r.MAC_Rede),
+                    (& $limparCampo $r.Bateria),
+                    (& $limparCampo $r.Android_Versao)
+                ) -join ';'
+                $linhasExport.Add($linha)
+            }
+
+            [System.IO.File]::WriteAllText($caminhoArquivo, (($linhasExport -join "`r`n") + "`r`n"), $script:utf8ComBOM)
+
+            Write-Host "`n [OK] Planilha patrimonial Excel CSV UTF-8 gerada com sucesso!" -ForegroundColor Green
+            Write-Host "      Arquivo: " -NoNewline -ForegroundColor Gray
+            Write-Host "$caminhoArquivo" -ForegroundColor Yellow
+            Write-Host "      Total de bens exportados: " -NoNewline -ForegroundColor Gray
+            Write-Host "$($registrosFiltrados.Count)" -ForegroundColor Green
+
+            if ($abrirAposExportar) { try { Invoke-Item $caminhoArquivo } catch {} }
+            return $caminhoArquivo
+        }
+
+        "HTML_EXCEL" {
+            $nomeArquivo = "Patrimonio_InnovCore_Formatado$($sufixoFiltro)_$($timestamp).xls"
+            $caminhoArquivo = Join-Path $script:pastaExport $nomeArquivo
+
+            $dataGeracao = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
+            $totalAtivos = $registrosFiltrados.Count
+
+            $linhasHtml = ""
+            $num = 1
+            foreach ($r in $registrosFiltrados) {
+                $bgClass = if ($num % 2 -eq 0) { "even" } else { "odd" }
+                $linhasHtml += "                <tr class=""$bgClass"">`r`n"
+                $linhasHtml += "                    <td align=""center""><b>$num</b></td>`r`n"
+                $linhasHtml += "                    <td class=""pat"">$($r.Codigo_Tombamento)</td>`r`n"
+                $linhasHtml += "                    <td><b>$($r.Nome_Bem_Produto)</b></td>`r`n"
+                $linhasHtml += "                    <td>$($r.Categoria_Bem)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Tipo_Especifico)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Setor_Atribuido)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Responsavel_Colaborador)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Fornecedor)</td>`r`n"
+                $linhasHtml += "                    <td class=""serial"">$($r.Numero_Nota_Fiscal)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.CRM_Serial)</td>`r`n"
+                $linhasHtml += "                    <td align=""center"">$($r.Data_Compra)</td>`r`n"
+                $linhasHtml += "                    <td align=""right"">R$ $($r.Valor_Compra)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Situacao)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Localizacao_Fisica_Posto)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Observacoes_Adicionais)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Empresa_Unidade)</td>`r`n"
+                $linhasHtml += "                </tr>`r`n"
+                $num++
+            }
+
+            $escopoTxt = if ($filtroSetor -or $filtroCategoria -or $filtroSituacao) { "Filtros aplicados" } else { "Patrimonio Completo" }
+            $conteudoHtml = @(
+                '<!DOCTYPE html>',
+                '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">',
+                '<head>',
+                '    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">',
+                '    <style>',
+                '        body { font-family: Arial, sans-serif; font-size: 11pt; color: #1e293b; background-color: #f8fafc; }',
+                '        .header-box { background-color: #0f172a; color: #ffffff; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; }',
+                '        .header-title { font-size: 20pt; font-weight: bold; margin: 0; color: #38bdf8; }',
+                '        .header-subtitle { font-size: 11pt; color: #cbd5e1; margin-top: 5px; }',
+                '        .stats-bar { background-color: #e2e8f0; padding: 10px 15px; border-radius: 6px; font-weight: bold; margin-bottom: 15px; }',
+                '        table { border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1; background-color: #ffffff; }',
+                '        th { background-color: #0284c7; color: #ffffff; font-weight: bold; padding: 10px 8px; font-size: 10.5pt; text-align: left; border: 1px solid #0369a1; }',
+                '        td { padding: 8px; border: 1px solid #e2e8f0; font-size: 9.5pt; }',
+                '        tr.even { background-color: #f8fafc; }',
+                '        tr.odd { background-color: #ffffff; }',
+                '        .pat { color: #0284c7; font-weight: bold; }',
+                '        .serial { color: #b45309; font-weight: 600; }',
+                '        .footer { font-size: 9pt; color: #64748b; margin-top: 20px; text-align: right; }',
+                '    </style>',
+                '</head>',
+                '<body>',
+                '    <div class="header-box">',
+                "        <h1 class=""header-title"">INNOVCORE TI - REGISTRO DE ATIVOS E PATRIMONIO</h1>",
+                "        <div class=""header-subtitle"">Gerado em: $dataGeracao | Escopo: $escopoTxt</div>",
+                '    </div>',
+                '    <div class="stats-bar">',
+                "        TOTAL DE BENS CATALOGADOS: $totalAtivos | SISTEMA: INNOVCORE TI v2.0",
+                '    </div>',
+                '    <table>',
+                '        <thead>',
+                '            <tr>',
+                '                <th>#</th>',
+                '                <th>Tombamento</th>',
+                '                <th>Nome do Bem</th>',
+                '                <th>Categoria</th>',
+                '                <th>Tipo</th>',
+                '                <th>Setor</th>',
+                '                <th>Responsavel</th>',
+                '                <th>Fornecedor</th>',
+                '                <th>Nota Fiscal</th>',
+                '                <th>Serial</th>',
+                '                <th>Data Compra</th>',
+                '                <th>Valor</th>',
+                '                <th>Situacao</th>',
+                '                <th>Localizacao</th>',
+                '                <th>Observacoes</th>',
+                '                <th>Empresa</th>',
+                '            </tr>',
+                '        </thead>',
+                '        <tbody>',
+                $linhasHtml,
+                '        </tbody>',
+                '    </table>',
+                '    <div class="footer">',
+                '        Relatorio gerado automaticamente por <b>InnovCore TI v2.0</b> - Gestao de Ativos e Patrimonio.',
+                '    </div>',
+                '</body>',
+                '</html>'
+            ) -join "`r`n"
+            [System.IO.File]::WriteAllText($caminhoArquivo, $conteudoHtml, $script:utf8ComBOM)
+
+            Write-Host "`n [OK] Planilha patrimonial formatada (.XLS/HTML) gerada com sucesso!" -ForegroundColor Green
+            Write-Host "      Arquivo: " -NoNewline -ForegroundColor Gray
+            Write-Host "$caminhoArquivo" -ForegroundColor Yellow
+
+            if ($abrirAposExportar) { try { Invoke-Item $caminhoArquivo } catch {} }
+            return $caminhoArquivo
+        }
+
+        "TXT_RELATORIO" {
+            $nomeArquivo = "Patrimonio_Executivo_InnovCore$($sufixoFiltro)_$($timestamp).txt"
+            $caminhoArquivo = Join-Path $script:pastaExport $nomeArquivo
+
+            $dataGeracao = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
+            $divisoria = "=" * 78
+            $subdivisoria = "-" * 78
+            $totalQtd = $registrosFiltrados.Count
+
+            $txt = @(
+                $divisoria,
+                "        INNOVCORE TI - RELATORIO DE REGISTRO DE ATIVOS E PATRIMONIO",
+                $divisoria,
+                " Data de Emissao: $dataGeracao",
+                " Total de Bens:   $totalQtd",
+                $divisoria,
+                ""
+            ) -join "`r`n"
+
+            $i = 1
+            foreach ($r in $registrosFiltrados) {
+                $txt += "[$i] TOMBAMENTO: $($r.Codigo_Tombamento) | BEM: $($r.Nome_Bem_Produto)`r`n"
+                $txt += "$subdivisoria`r`n"
+                $txt += "  - Empresa / Unidade:      $($r.Empresa_Unidade)`r`n"
+                $txt += "  - Categoria do Bem:       $($r.Categoria_Bem)`r`n"
+                $txt += "  - Tipo / Subtipo:         $($r.Tipo_Especifico)`r`n"
+                $txt += "  - Atribuido a (Setor):    $($r.Setor_Atribuido)`r`n"
+                $txt += "  - Responsavel:            $($r.Responsavel_Colaborador)`r`n"
+                $txt += "  - Fornecedor:             $($r.Fornecedor)`r`n"
+                $txt += "  - Nota Fiscal:            $($r.Numero_Nota_Fiscal)`r`n"
+                $txt += "  - CRM / Serial:           $($r.CRM_Serial)`r`n"
+                $txt += "  - Situacao:               $($r.Situacao)`r`n"
+                $txt += "  - Data da Compra:         $($r.Data_Compra)`r`n"
+                $txt += "  - Valor da Compra:        R$ $($r.Valor_Compra)`r`n"
+                $txt += "  - Localizacao Fisica:     $($r.Localizacao_Fisica_Posto)`r`n"
+                $txt += "  - Observacoes:            $($r.Observacoes_Adicionais)`r`n"
+                $txt += "  - Registrado em:          $($r.Data_Registro)`r`n`r`n"
+                $i++
+            }
+
+            $txt += "$divisoria`r`n INNOVCORE TI - Desenvolvido por Jordan para InnovTech`r`n$divisoria`r`n"
+            [System.IO.File]::WriteAllText($caminhoArquivo, $txt, $script:utf8ComBOM)
+
+            Write-Host "`n [OK] Relatorio executivo patrimonial gerado com sucesso!" -ForegroundColor Green
+            Write-Host "      Arquivo: " -NoNewline -ForegroundColor Gray
+            Write-Host "$caminhoArquivo" -ForegroundColor Yellow
+
+            if ($abrirAposExportar) { try { Invoke-Item $caminhoArquivo } catch {} }
+            return $caminhoArquivo
+        }
+    }
+}
+# ==============================================================================
+# MENU DO MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO
+# ==============================================================================
+function Menu-ModuloAtivos {
+    param([string]$caminhoCsvAtivos)
+
+    $emModulo = $true
+    while ($emModulo) {
+        Atualizar-TamanhoTerminal
+        $ativos = Obter-RegistrosCsv -caminho $caminhoCsvAtivos -empresaPadrao "InnovEdu" -setorPadrao "Operacoes e Logistica"
+        $totalValor = 0.0
+        foreach ($r in $ativos) { $totalValor += (Converter-ValorNumerico $r.Valor_Compra) }
+
+        try { Clear-Host } catch {}
+        Exibir-LogoPrincipal
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host " |        >>> MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO <<<           |" -ForegroundColor Yellow
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host "  Bens cadastrados: " -NoNewline -ForegroundColor Gray
+        Write-Host "$($ativos.Count)" -ForegroundColor Green
+        Write-Host "  Valor do patrimonio: " -NoNewline -ForegroundColor Gray
+        Write-Host ("R$ " + (Formatar-Moeda $totalValor)) -ForegroundColor Yellow
+        Write-Host "  Proximo tombamento: " -NoNewline -ForegroundColor Gray
+        Write-Host "$(Obter-ProximoPatrimonio -registros $ativos)" -ForegroundColor Cyan
+        Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[1]" -NoNewline -ForegroundColor Green;  Write-Host " Novo Cadastro de Bem     (Rapido ou completo, em lote)          |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[2]" -NoNewline -ForegroundColor Green;  Write-Host " Importar Planilha         (Cadastrar muitos bens via CSV)       |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[3]" -NoNewline -ForegroundColor Yellow; Write-Host " Consultar Ativos          (Buscar, filtrar e ver ficha)         |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[4]" -NoNewline -ForegroundColor Cyan;   Write-Host " Editar Ativo              (Corrigir dados do bem)               |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[5]" -NoNewline -ForegroundColor Red;    Write-Host " Excluir Ativo             (Remover bem com backup automatico)   |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[6]" -NoNewline -ForegroundColor Magenta;Write-Host " Termo de Responsabilidade (Gerar termo de custodia do bem)      |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[7]" -NoNewline -ForegroundColor Magenta;Write-Host " Exportar Ativos           (CSV Excel / XLS Formatado / TXT)     |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[8]" -NoNewline -ForegroundColor Yellow; Write-Host " Dashboard do Patrimonio   (Totais por setor, categoria, valor)  |" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[9]" -NoNewline -ForegroundColor White; Write-Host " Colaboradores/Fornecedores (Cadastro mestre de pessoas e empresas)|" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[10]" -NoNewline -ForegroundColor DarkCyan;Write-Host " Catalogo e Arquivos       (Tipos, planilhas e pasta de exportacoes)|" -ForegroundColor White
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[0]" -NoNewline -ForegroundColor DarkGray;Write-Host " Voltar ao Menu Principal                                        |" -ForegroundColor Gray
+        Write-Host " +======================================================================+" -ForegroundColor Cyan
+        Write-Host ""
+
+        $opcao = Ler-OpcaoOuEsc -prompt " Digite o numero da opcao desejada (ou ESC para voltar)" -valorPadrao "1"
+
+        try {
+        switch ($opcao.Trim()) {
+            "1" {
+                Iniciar-CadastroBemPatrimonial -registrosAtuais $ativos -caminhoCsv $caminhoCsvAtivos
+            }
+            "2" {
+                Importar-AtivosPlanilha -registrosAtuais $ativos -caminhoCsv $caminhoCsvAtivos
+            }
+            "3" {
+                Menu-ConsultarAtivos -registros $ativos
+            }
+            "4" {
+                Menu-EditarAtivo -registros $ativos -caminhoCsv $caminhoCsvAtivos
+            }
+            "5" {
+                Excluir-BensAtivos -registros $ativos -caminhoCsv $caminhoCsvAtivos
+            }
+            "6" {
+                Gerar-TermoResponsabilidade -registros $ativos -caminhoCsv $caminhoCsvAtivos
+            }
+            "7" {
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " |                 >>> EXPORTACAO DE ATIVOS PATRIMONIAIS <<<            |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                Write-Host "  [1] Exportar Planilha CSV UTF-8 (Excel PT-BR)" -ForegroundColor White
+                Write-Host "  [2] Exportar Planilha Formatada (.XLS Estilizado)" -ForegroundColor Yellow
+                Write-Host "  [3] Exportar Relatorio Executivo (.TXT)" -ForegroundColor Magenta
+                Write-Host "  [4] Exportar apenas um Setor especifico" -ForegroundColor Cyan
+                Write-Host "  [5] Exportar por Categoria de Bem" -ForegroundColor Cyan
+                Write-Host "  [6] Exportar por Situacao" -ForegroundColor Cyan
+                Write-Host "  [0] Voltar ao Módulo 1" -ForegroundColor Gray
+                Write-Host ""
+
+                $subOpcao = Ler-OpcaoOuEsc -prompt " Escolha a opcao de exportacao" -valorPadrao "1"
+
+                switch ($subOpcao.Trim()) {
+                    "1" { Exportar-AtivosPatrimoniais -registros $ativos -tipo "CSV_EXCEL" -abrirAposExportar:$true }
+                    "2" { Exportar-AtivosPatrimoniais -registros $ativos -tipo "HTML_EXCEL" -abrirAposExportar:$true }
+                    "3" { Exportar-AtivosPatrimoniais -registros $ativos -tipo "TXT_RELATORIO" -abrirAposExportar:$false }
+                    "4" {
+                        $setores = @()
+                        foreach ($r in $ativos) { if ($r.Setor_Atribuido -and $setores -notcontains $r.Setor_Atribuido) { $setores += $r.Setor_Atribuido } }
+                        if ($setores.Count -eq 0) {
+                            Write-Host " [!] Nenhum setor cadastrado." -ForegroundColor Yellow
+                        } else {
+                            $opc = Selecionar-Opcao -titulo "Setor para exportar" -opcoes $setores
+                            if ($null -ne $opc) { Exportar-AtivosPatrimoniais -registros $ativos -tipo "CSV_EXCEL" -filtroSetor $opc -abrirAposExportar:$true }
+                        }
+                    }
+                    "5" {
+                        $categorias = @()
+                        foreach ($r in $ativos) { if ($r.Categoria_Bem -and $categorias -notcontains $r.Categoria_Bem) { $categorias += $r.Categoria_Bem } }
+                        if ($categorias.Count -eq 0) {
+                            Write-Host " [!] Nenhuma categoria cadastrada." -ForegroundColor Yellow
+                        } else {
+                            $opc = Selecionar-Opcao -titulo "Categoria para exportar" -opcoes $categorias
+                            if ($null -ne $opc) { Exportar-AtivosPatrimoniais -registros $ativos -tipo "CSV_EXCEL" -filtroCategoria $opc -abrirAposExportar:$true }
+                        }
+                    }
+                    "6" {
+                        $situacoes = @()
+                        foreach ($r in $ativos) { if ($r.Situacao -and $situacoes -notcontains $r.Situacao) { $situacoes += $r.Situacao } }
+                        if ($situacoes.Count -eq 0) {
+                            Write-Host " [!] Nenhuma situacao cadastrada." -ForegroundColor Yellow
+                        } else {
+                            $opc = Selecionar-Opcao -titulo "Situacao para exportar" -opcoes $situacoes
+                            if ($null -ne $opc) { Exportar-AtivosPatrimoniais -registros $ativos -tipo "CSV_EXCEL" -filtroSituacao $opc -abrirAposExportar:$true }
+                        }
+                    }
+                    "0" { }
+                    default { Write-Host " Opcao invalida." -ForegroundColor Red }
+                }
+                Pausar-Tela
+            }
+            "8" {
+                Menu-DashboardAtivos -registros $ativos
+            }
+            "9" {
+                Menu-GerenciarParceiros
+            }
+            "10" {
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host " |                 >>> CATALOGO E ARQUIVOS <<<                         |" -ForegroundColor Yellow
+                Write-Host " +======================================================================+" -ForegroundColor Cyan
+                Write-Host "  [1] Abrir Catalogo de Tipos de Bens (Excel)" -ForegroundColor White
+                Write-Host "  [2] Abrir Cadastro Mestre de Colaboradores (Excel)" -ForegroundColor White
+                Write-Host "  [3] Abrir Cadastro Mestre de Fornecedores (Excel)" -ForegroundColor White
+                Write-Host "  [4] Abrir Planilha de Ativos (Excel)" -ForegroundColor White
+                Write-Host "  [5] Abrir Modelo de Importacao (Excel)" -ForegroundColor White
+                Write-Host "  [6] Abrir Pasta de Termos de Responsabilidade" -ForegroundColor DarkCyan
+                Write-Host "  [7] Abrir Pasta de Exportacoes" -ForegroundColor DarkCyan
+                Write-Host "  [0] Voltar ao Módulo 1" -ForegroundColor Gray
+                Write-Host ""
+                $sub = Ler-OpcaoOuEsc -prompt " Escolha o arquivo" -valorPadrao "1"
+                switch ($sub.Trim()) {
+                    "1" { try { Invoke-Item $script:caminhoCatalogoAtivos } catch { Write-Host " [!] Catalogo nao encontrado." -ForegroundColor Red } }
+                    "2" { try { Invoke-Item $script:caminhoCatalogoColaboradores } catch { Write-Host " [!] Catalogo nao encontrado." -ForegroundColor Red } }
+                    "3" { try { Invoke-Item $script:caminhoCatalogoFornecedores } catch { Write-Host " [!] Catalogo nao encontrado." -ForegroundColor Red } }
+                    "4" { try { Invoke-Item $caminhoCsvAtivos } catch { Write-Host " [!] Planilha nao encontrada." -ForegroundColor Red } }
+                    "5" {
+                        if (!(Test-Path $script:caminhoModeloImportacao)) { [void](Gerar-ModeloImportacao -caminho $script:caminhoModeloImportacao) }
+                        try { Invoke-Item $script:caminhoModeloImportacao } catch { Write-Host " [!] Modelo nao encontrado." -ForegroundColor Red }
+                    }
+                    "6" { if (!(Test-Path $script:pastaTermos)) { try { New-Item -ItemType Directory -Path $script:pastaTermos -Force | Out-Null } catch {} }; try { Invoke-Item $script:pastaTermos } catch {} }
+                    "7" { if (!(Test-Path $script:pastaExport)) { try { New-Item -ItemType Directory -Path $script:pastaExport -Force | Out-Null } catch {} }; try { Invoke-Item $script:pastaExport } catch {} }
+                    "0" { }
+                    default { Write-Host " Opcao invalida." -ForegroundColor Red }
+                }
+                Pausar-Tela
+            }
+            "0" { $emModulo = $false }
+            default {
+                Write-Host " Opcao invalida." -ForegroundColor Red
+                Start-Sleep -Milliseconds 700
+            }
+        }
+        }
+        catch [System.OperationCanceledException] {
+            Write-Host ""
+            Write-Host " [i] Operacao cancelada. Nada foi gravado." -ForegroundColor Yellow
+            Start-Sleep -Milliseconds 400
+        }
+    }
+}
+# ==============================================================================
 # MOTOR DE EXPORTACAO EXCEL UTF-8 / HTML / RELATORIOS
 # ==============================================================================
 function Exportar-InventarioExcel {
@@ -1540,7 +4269,7 @@ function Exportar-InventarioExcel {
     $registrosFiltrados = if ([string]::IsNullOrWhiteSpace($filtroSetor)) {
         $registros
     } else {
-        @($registros | Where-Object { $_.Setor -eq $filtroSetor })
+        @($registros | Where-Object { ($_.Setor_Atribuido -eq $filtroSetor) -or ($_.Setor -eq $filtroSetor) })
     }
     
     if ($registrosFiltrados.Count -eq 0) {
@@ -1564,16 +4293,21 @@ function Exportar-InventarioExcel {
             foreach ($r in $registrosFiltrados) {
                 $linha = @(
                     (& $limparCampo $r.Data_Registro),
-                    (& $limparCampo $r.Empresa),
-                    (& $limparCampo $r.Patrimonio),
-                    (& $limparCampo $r.Usuario),
-                    (& $limparCampo $r.Funcao),
-                    (& $limparCampo $r.Setor),
-                    (& $limparCampo $r.Tipo_Equipamento),
-                    (& $limparCampo $r.Marca),
-                    (& $limparCampo $r.Modelo),
-                    (& $limparCampo $r.Numero_Serie),
-                    (& $limparCampo $r.Ano_Fabricacao),
+                    (& $limparCampo $r.Empresa_Unidade),
+                    (& $limparCampo $r.Codigo_Tombamento),
+                    (& $limparCampo $r.Numero_Nota_Fiscal),
+                    (& $limparCampo $r.CRM_Serial),
+                    (& $limparCampo $r.Categoria_Bem),
+                    (& $limparCampo $r.Tipo_Especifico),
+                    (& $limparCampo $r.Nome_Bem_Produto),
+                    (& $limparCampo $r.Setor_Atribuido),
+                    (& $limparCampo $r.Responsavel_Colaborador),
+                    (& $limparCampo $r.Fornecedor),
+                    (& $limparCampo $r.Situacao),
+                    (& $limparCampo $r.Data_Compra),
+                    (& $limparCampo $r.Valor_Compra),
+                    (& $limparCampo $r.Localizacao_Fisica_Posto),
+                    (& $limparCampo $r.Observacoes_Adicionais),
                     (& $limparCampo $r.Nome_Computador),
                     (& $limparCampo $r.Processador),
                     (& $limparCampo $r.Memoria_RAM),
@@ -1581,7 +4315,9 @@ function Exportar-InventarioExcel {
                     (& $limparCampo $r.Placa_Video),
                     (& $limparCampo $r.Sistema_Operacional),
                     (& $limparCampo $r.IP_Rede),
-                    (& $limparCampo $r.MAC_Rede)
+                    (& $limparCampo $r.MAC_Rede),
+                    (& $limparCampo $r.Bateria),
+                    (& $limparCampo $r.Android_Versao)
                 ) -join ';'
                 $linhasExport.Add($linha)
             }
@@ -1591,7 +4327,7 @@ function Exportar-InventarioExcel {
             Write-Host "`n [OK] Planilha Excel CSV UTF-8 gerada com sucesso!" -ForegroundColor Green
             Write-Host "      Arquivo: " -NoNewline -ForegroundColor Gray
             Write-Host "$caminhoArquivo" -ForegroundColor Yellow
-            Write-Host "      Total de maquinas exportadas: " -NoNewline -ForegroundColor Gray
+            Write-Host "      Total de ativos exportados: " -NoNewline -ForegroundColor Gray
             Write-Host "$($registrosFiltrados.Count)" -ForegroundColor Green
             
             if ($abrirAposExportar) {
@@ -1600,13 +4336,13 @@ function Exportar-InventarioExcel {
             return $caminhoArquivo
         }
         
-        "HTML_EXCEL" {
+"HTML_EXCEL" {
             # Planilha Formatada em HTML Corporativo InnovCore (Abre perfeitamente no Excel e em qualquer Navegador)
             $nomeArquivo = "Relatorio_InnovCore_Formatado$($sufixoFiltro)_$($timestamp).xls"
             $caminhoArquivo = Join-Path $script:pastaExport $nomeArquivo
             
             $dataGeracao = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
-            $totalMaquinas = $registrosFiltrados.Count
+            $totalAtivos = $registrosFiltrados.Count
             
             $linhasHtml = ""
             $num = 1
@@ -1614,21 +4350,19 @@ function Exportar-InventarioExcel {
                 $bgClass = if ($num % 2 -eq 0) { "even" } else { "odd" }
                 $linhasHtml += "                <tr class=""$bgClass"">`r`n"
                 $linhasHtml += "                    <td align=""center""><b>$num</b></td>`r`n"
-                $linhasHtml += "                    <td class=""pat"">$($r.Patrimonio)</td>`r`n"
-                $linhasHtml += "                    <td><b>$($r.Usuario)</b></td>`r`n"
-                $linhasHtml += "                    <td>$($r.Setor)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Funcao)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Marca)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Modelo)</td>`r`n"
-                $linhasHtml += "                    <td class=""serial"">$($r.Numero_Serie)</td>`r`n"
-                $linhasHtml += "                    <td align=""center"">$($r.Ano_Fabricacao)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Nome_Computador)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Processador)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Memoria_RAM)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Armazenamento)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Placa_Video)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.Sistema_Operacional)</td>`r`n"
-                $linhasHtml += "                    <td>$($r.IP_Rede)</td>`r`n"
+                $linhasHtml += "                    <td class=""pat"">$($r.Codigo_Tombamento)</td>`r`n"
+                $linhasHtml += "                    <td><b>$($r.Nome_Bem_Produto)</b></td>`r`n"
+                $linhasHtml += "                    <td>$($r.Categoria_Bem)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Tipo_Especifico)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Setor_Atribuido)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Responsavel_Colaborador)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Fornecedor)</td>`r`n"
+                $linhasHtml += "                    <td class=""serial"">$($r.CRM_Serial)</td>`r`n"
+                $linhasHtml += "                    <td align=""center"">$($r.Data_Compra)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Valor_Compra)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Situacao)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Localizacao_Fisica_Posto)</td>`r`n"
+                $linhasHtml += "                    <td>$($r.Observacoes_Adicionais)</td>`r`n"
                 $linhasHtml += "                    <td>$($r.Data_Registro)</td>`r`n"
                 $linhasHtml += "                </tr>`r`n"
                 $num++
@@ -1662,27 +4396,25 @@ function Exportar-InventarioExcel {
                 "        <div class=""header-subtitle"">Empresa: InnovTech | Gerado em: $dataGeracao | Escopo: $escopoTxt</div>",
                 '    </div>',
                 '    <div class="stats-bar">',
-                "        TOTAL DE EQUIPAMENTOS CATALOGADOS: $totalMaquinas | SISTEMA: INNOVCORE TI v2.0",
+                "        TOTAL DE ATIVOS CATALOGADOS: $totalAtivos | SISTEMA: INNOVCORE TI v2.0",
                 '    </div>',
                 '    <table>',
                 '        <thead>',
                 '            <tr>',
                 '                <th>#</th>',
-                '                <th>Patrimonio</th>',
-                '                <th>Colaborador</th>',
+                '                <th>Tombamento</th>',
+                '                <th>Nome do Bem</th>',
+                '                <th>Categoria</th>',
+                '                <th>Tipo</th>',
                 '                <th>Setor</th>',
-                '                <th>Cargo / Funcao</th>',
-                '                <th>Marca</th>',
-                '                <th>Modelo</th>',
+                '                <th>Responsavel</th>',
+                '                <th>Fornecedor</th>',
                 '                <th>N Serie</th>',
-                '                <th>Ano</th>',
-                '                <th>Hostname</th>',
-                '                <th>Processador</th>',
-                '                <th>Memoria RAM</th>',
-                '                <th>Armazenamento</th>',
-                '                <th>Placa de Video</th>',
-                '                <th>Sistema Operacional</th>',
-                '                <th>IPv4</th>',
+                '                <th>Data Compra</th>',
+                '                <th>Valor (R$)</th>',
+                '                <th>Situacao</th>',
+                '                <th>Localizacao</th>',
+                '                <th>Observacoes</th>',
                 '                <th>Data Coleta</th>',
                 '            </tr>',
                 '        </thead>',
@@ -1725,7 +4457,7 @@ function Exportar-InventarioExcel {
                 "           INNOVCORE TI - RELATORIO CONSOLIDADO DE GESTAO DE ATIVOS",
                 $divisoria,
                 " Data de Emissao: $dataGeracao",
-                " Total de Maquinas: $totalQtd",
+                " Total de Ativos: $totalQtd",
                 " Escopo: $escopoTxt",
                 $divisoria,
                 ""
@@ -1733,24 +4465,22 @@ function Exportar-InventarioExcel {
             
             $i = 1
             foreach ($r in $registrosFiltrados) {
-                $txt += "[$i] PATRIMONIO: $($r.Patrimonio) | COLABORADOR: $($r.Usuario)`r`n"
+                $txt += "[$i] TOMBAMENTO: $($r.Codigo_Tombamento) | BEM: $($r.Nome_Bem_Produto)`r`n"
                 $txt += "$subdivisoria`r`n"
-                $txt += "  - Empresa:            $($r.Empresa)`r`n"
-                $txt += "  - Setor:              $($r.Setor)`r`n"
-                $txt += "  - Cargo / Funcao:     $($r.Funcao)`r`n"
-                $txt += "  - Tipo Equipamento:   $($r.Tipo_Equipamento)`r`n"
-                $txt += "  - Fabricante / Marca: $($r.Marca)`r`n"
-                $txt += "  - Modelo:             $($r.Modelo)`r`n"
-                $txt += "  - Numero de Serie:    $($r.Numero_Serie)`r`n"
-                $txt += "  - Ano de Fabricacao:  $($r.Ano_Fabricacao)`r`n"
-                $txt += "  - Nome do Host:       $($r.Nome_Computador)`r`n"
-                $txt += "  - Processador:        $($r.Processador)`r`n"
-                $txt += "  - Memoria RAM:        $($r.Memoria_RAM)`r`n"
-                $txt += "  - Armazenamento:      $($r.Armazenamento)`r`n"
-                $txt += "  - Placa de Video:     $($r.Placa_Video)`r`n"
-                $txt += "  - Sistema Operacional:$($r.Sistema_Operacional)`r`n"
-                $txt += "  - Endereco IP / MAC:  $($r.IP_Rede) | $($r.MAC_Rede)`r`n"
-                $txt += "  - Registrado em:      $($r.Data_Registro)`r`n`r`n"
+                $txt += "  - Empresa / Unidade:      $($r.Empresa_Unidade)`r`n"
+                $txt += "  - Categoria do Bem:       $($r.Categoria_Bem)`r`n"
+                $txt += "  - Tipo / Subtipo:         $($r.Tipo_Especifico)`r`n"
+                $txt += "  - Atribuido a (Setor):    $($r.Setor_Atribuido)`r`n"
+                $txt += "  - Responsavel:            $($r.Responsavel_Colaborador)`r`n"
+                $txt += "  - Fornecedor:             $($r.Fornecedor)`r`n"
+                $txt += "  - Numero da Nota Fiscal:  $($r.Numero_Nota_Fiscal)`r`n"
+                $txt += "  - CRM / Serial:           $($r.CRM_Serial)`r`n"
+                $txt += "  - Situacao:               $($r.Situacao)`r`n"
+                $txt += "  - Data da Compra:         $($r.Data_Compra)`r`n"
+                $txt += "  - Valor da Compra:        R$ $($r.Valor_Compra)`r`n"
+                $txt += "  - Localizacao Fisica:     $($r.Localizacao_Fisica_Posto)`r`n"
+                $txt += "  - Observacoes:            $($r.Observacoes_Adicionais)`r`n"
+                $txt += "  - Registrado em:          $($r.Data_Registro)`r`n`r`n"
                 $i++
             }
             
@@ -1841,7 +4571,7 @@ function Menu-Exportacao {
                 Pausar-Tela
             }
             "4" {
-                $setoresDisponiveis = @($registros | ForEach-Object { $_.Setor.Trim() } | Where-Object { $_ -ne "" } | Select-Object -Unique)
+                $setoresDisponiveis = @($registros | ForEach-Object { Obter-SetorDoRegistro $_ } | Where-Object { $_ -ne "" } | Select-Object -Unique)
                 Write-Host "`n Setores cadastrados no sistema:" -ForegroundColor Yellow
                 for ($k = 0; $k -lt $setoresDisponiveis.Count; $k++) {
                     $nFormat = ($k + 1).ToString().PadLeft(2, ' ')
@@ -1970,7 +4700,7 @@ function Menu-ConsultarRegistros {
                     $t = $termo.Trim()
                     $encontrados = switch ($opcConsulta.Trim()) {
                         "2" { @($registros | Where-Object { $_.Usuario -match "(?i)$t" }) }
-                        "3" { @($registros | Where-Object { $_.Setor -match "(?i)$t" }) }
+                        "3" { @($registros | Where-Object { (Obter-SetorDoRegistro $_) -match "(?i)$t" }) }
                         "4" { @($registros | Where-Object { $_.Patrimonio -match "(?i)$t" }) }
                         "5" { @($registros | Where-Object { $_.Numero_Serie -match "(?i)$t" -or $_.Nome_Computador -match "(?i)$t" }) }
                     }
@@ -2202,7 +4932,7 @@ function Menu-DashboardExecutivo {
         }
         
         $grpSetores = $registrosValidos | Group-Object { 
-            if ($_.Setor -and $_.Setor.Trim() -ne "") { $_.Setor.Trim() } else { "Nao Informado" } 
+            if ((Obter-SetorDoRegistro $_) -ne "") { Obter-SetorDoRegistro $_ } else { "Nao Informado" } 
         } | Sort-Object Count -Descending
         $topSetorNome = if ($grpSetores.Count -gt 0 -and $grpSetores[0].Name) { $grpSetores[0].Name } else { "N/A" }
         $topSetorQtd  = if ($grpSetores.Count -gt 0) { $grpSetores[0].Count } else { 0 }
@@ -2558,7 +5288,7 @@ function Menu-GestaoMobileTablets {
         Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[3]" -NoNewline -ForegroundColor Yellow; Write-Host " Listar Tablets        (Ver Seriais, MACs Reais e Baterias)      |" -ForegroundColor White
         Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[4]" -NoNewline -ForegroundColor Red;    Write-Host " Excluir Tablet(s)     (Excluir 1 ou mais registros com backup)  |" -ForegroundColor White
         Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[5]" -NoNewline -ForegroundColor Green;  Write-Host " Exportar Relatorio    (Gerar planilha Excel UTF-8 de Tablets)   |" -ForegroundColor White
-        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[0]" -NoNewline -ForegroundColor DarkGray;Write-Host " Voltar ao Menu Principal                                       |" -ForegroundColor Gray
+        Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[0]" -NoNewline -ForegroundColor DarkGray;Write-Host " Voltar ao Menu Principal                                        |" -ForegroundColor Gray
         Write-Host " +======================================================================+" -ForegroundColor Cyan
         Write-Host ""
         $opcM = Ler-OpcaoOuEsc -prompt " Digite o numero da opcao desejada (ou ESC para voltar)" -valorPadrao "3"
@@ -2824,26 +5554,32 @@ function Menu-GestaoMobileTablets {
 $executando = $true
 
 while ($executando) {
+    try {
+    Atualizar-TamanhoTerminal
     try { Clear-Host } catch {}
     Exibir-LogoPrincipal
     Write-Host " +======================================================================+" -ForegroundColor Cyan
-    Write-Host " |      [1] MODULO COMPUTADORES & DESKTOPS (WINDOWS / MACOS)            |" -ForegroundColor Yellow
+    Write-Host " |      [M1] MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO (BENS GERAIS)  |" -ForegroundColor Green
     Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[1]" -NoNewline -ForegroundColor Green;  Write-Host " Novo Cadastro PC      (Coleta pecas e hardware de PCs/Laptops)  |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[2]" -NoNewline -ForegroundColor Yellow; Write-Host " Consultar Computadores(Buscar por Patrimonio, Setor ou Usuario) |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[3]" -NoNewline -ForegroundColor Cyan;   Write-Host " Editar Computador     (Alterar pecas, usuario ou departamento)  |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[4]" -NoNewline -ForegroundColor Red;    Write-Host " Excluir Computador    (Remover PC com backup de seguranca)      |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[1]" -NoNewline -ForegroundColor Green;  Write-Host " Central de Ativos      (Cadastrar, consultar e exportar bens)   |" -ForegroundColor White
     Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host " |      [2] MODULO MOBILE & TABLETS (ANDROID VIA CABO USB / ADB)        |" -ForegroundColor Magenta
+    Write-Host " |      [M2] MODULO 2 - COMPUTADORES & DESKTOPS (WINDOWS / MACOS)       |" -ForegroundColor Yellow
     Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[5]" -NoNewline -ForegroundColor Magenta;Write-Host " Central Gestao Mobile (Lista de Tablets, Exclusao e Relatorios) |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[6]" -NoNewline -ForegroundColor Green;  Write-Host " Auto-Scanner Bancada  (Plug & Play USB - Captura MAC wlan0)     |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[2]" -NoNewline -ForegroundColor Green;  Write-Host " Novo Cadastro PC      (Coleta pecas e hardware de PCs/Laptops)  |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[3]" -NoNewline -ForegroundColor Yellow; Write-Host " Consultar Computadores(Buscar por Patrimonio, Setor ou Usuario) |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[4]" -NoNewline -ForegroundColor Cyan;   Write-Host " Editar Computador     (Alterar pecas, usuario ou departamento)  |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[5]" -NoNewline -ForegroundColor Red;    Write-Host " Excluir Computador    (Remover PC com backup de seguranca)      |" -ForegroundColor White
     Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host " |      [3] FERRAMENTAS GERAIS, EXPORTACAO & NUVEM                      |" -ForegroundColor Cyan
+    Write-Host " |      [M3] MODULO 3 - MOBILE & TABLETS (ANDROID VIA CABO USB / ADB)   |" -ForegroundColor Magenta
     Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[7]" -NoNewline -ForegroundColor Green;  Write-Host " Central de Exportacao (Gerar planilhas Excel UTF-8 / CSV)       |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[8]" -NoNewline -ForegroundColor Yellow; Write-Host " Dashboard & Metricas  (Graficos ASCII e resumo executivo)       |" -ForegroundColor White
-    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[9]" -NoNewline -ForegroundColor Green;  Write-Host " Sincronizar InnovStock(Enviar dados para nuvem corporativa)     |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[6]" -NoNewline -ForegroundColor Magenta;Write-Host " Central Gestao Mobile (Lista de Tablets, Exclusao e Relatorios) |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[7]" -NoNewline -ForegroundColor Green;  Write-Host " Auto-Scanner Bancada  (Plug & Play USB - Captura MAC wlan0)     |" -ForegroundColor White
+    Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host " |      [M4] FERRAMENTAS GERAIS, EXPORTACAO & NUVEM                     |" -ForegroundColor Cyan
+    Write-Host " +----------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[8]" -NoNewline -ForegroundColor Green;  Write-Host " Central de Exportacao (Gerar planilhas Excel UTF-8 / CSV)       |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[9]" -NoNewline -ForegroundColor Yellow; Write-Host " Dashboard & Metricas  (Graficos ASCII e resumo executivo)       |" -ForegroundColor White
+    Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[10]" -NoNewline -ForegroundColor Green; Write-Host " Sincronizar InnovStock(Enviar dados para nuvem corporativa)    |" -ForegroundColor White
     Write-Host " |  " -NoNewline -ForegroundColor Cyan; Write-Host "[0]" -NoNewline -ForegroundColor DarkGray;Write-Host " Sair do Sistema                                                 |" -ForegroundColor Gray
     Write-Host " +======================================================================+" -ForegroundColor Cyan
     Write-Host ""
@@ -2851,9 +5587,9 @@ while ($executando) {
     $opcao = Ler-OpcaoOuEsc -prompt " Digite o numero da opcao desejada (ou ESC para sair)" -valorPadrao "1"
     
     switch ($opcao.Trim()) {
-        "1" {
+        "2" {
             # ------------------------------------------------------------------
-            # OPCAO 1: NOVO CADASTRO (AUTOMATICO OU MANUAL OU ANDROID ADB)
+            # OPCAO 2: NOVO CADASTRO (AUTOMATICO OU MANUAL OU ANDROID ADB)
             # ------------------------------------------------------------------
             try { Clear-Host } catch {}
             Exibir-LogoPrincipal
@@ -2893,7 +5629,7 @@ while ($executando) {
                 )
                 $setoresHistorico = @()
                 if ($registrosAtuais.Count -gt 0) {
-                    $setoresHistorico = @($registrosAtuais | ForEach-Object { $_.Setor.Trim() } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
+                    $setoresHistorico = @($registrosAtuais | ForEach-Object { Obter-SetorDoRegistro $_ } | Where-Object { $_ -ne "" -and $_ -notmatch '^\d+$' } | Select-Object -Unique)
                 }
                 $listaSetores = @()
                 foreach ($s in $setoresHistorico) { if ($listaSetores -notcontains $s) { $listaSetores += $s } }
@@ -2933,7 +5669,7 @@ while ($executando) {
                     $numFormatado = ($i + 1).ToString().PadLeft(2, ' ')
                     $ehHistorico = ($setoresHistorico -contains $listaSetores[$i])
                     $corSetor = if ($ehHistorico) { "Green" } else { "White" }
-                    $qtdSetor = @($registrosAtuais | Where-Object { $_.Setor -eq $listaSetores[$i] }).Count
+                    $qtdSetor = @($registrosAtuais | Where-Object { (Obter-SetorDoRegistro $_) -eq $listaSetores[$i] }).Count
                     $tagQtd = if ($qtdSetor -gt 0) { " ($qtdSetor PCs)" } else { "" }
                     Write-Host "     [$numFormatado] " -NoNewline -ForegroundColor Cyan
                     Write-Host "$($listaSetores[$i])$tagQtd" -ForegroundColor $corSetor
@@ -3104,25 +5840,25 @@ while ($executando) {
             }
         }
         
-        "2" {
+        "3" {
             # ------------------------------------------------------------------
-            # OPCAO 2: CONSULTAR / PESQUISAR CADASTROS
+            # OPCAO 3: CONSULTAR / PESQUISAR CADASTROS
             # ------------------------------------------------------------------
             $registros = Obter-RegistrosCsv -caminho $caminhoCsv
             Menu-ConsultarRegistros -registros $registros
         }
         
-        "3" {
+        "4" {
             # ------------------------------------------------------------------
-            # OPCAO 3: EDITAR CADASTRO
+            # OPCAO 4: EDITAR CADASTRO
             # ------------------------------------------------------------------
             $registros = Obter-RegistrosCsv -caminho $caminhoCsv
             Menu-EditarCadastro -registros $registros
         }
         
-        "4" {
+        "5" {
             # ------------------------------------------------------------------
-            # OPCAO 4: EXCLUIR CADASTRO
+            # OPCAO 5: EXCLUIR CADASTRO
             # ------------------------------------------------------------------
             try { Clear-Host } catch {}
             Exibir-LogoPrincipal
@@ -3188,9 +5924,9 @@ while ($executando) {
             }
         }
         
-        "5" {
+        "6" {
             # ------------------------------------------------------------------
-            # OPCAO 5: CENTRAL DE GESTAO MOBILE & TABLETS (ANDROID / ADB)
+            # OPCAO 6: CENTRAL DE GESTAO MOBILE & TABLETS (ANDROID / ADB)
             # ------------------------------------------------------------------
             Menu-GestaoMobileTablets
         }
@@ -3211,9 +5947,9 @@ while ($executando) {
             Menu-GestaoMobileTablets
         }
         
-        "6" {
+        "7" {
             # ------------------------------------------------------------------
-            # OPCAO 6: AUTO-SCANNER BANCADA PLUG & PLAY (USB)
+            # OPCAO 7: AUTO-SCANNER BANCADA PLUG & PLAY (USB)
             # ------------------------------------------------------------------
             $scriptAutoScan = Join-Path $scriptRootDir "mobile\capturar_mac_tablet.ps1"
             if (-not (Test-Path $scriptAutoScan)) {
@@ -3239,25 +5975,25 @@ while ($executando) {
             if (Test-Path $scriptAutoScan) { & $scriptAutoScan } else { Pausar-Tela }
         }
         
-        "7" {
+        "8" {
             # ------------------------------------------------------------------
-            # OPCAO 7: CENTRAL DE EXPORTACAO EXCEL UTF-8 / FORMATADOS
+            # OPCAO 8: CENTRAL DE EXPORTACAO EXCEL UTF-8 / FORMATADOS
             # ------------------------------------------------------------------
             $registros = Obter-RegistrosCsv -caminho $caminhoCsv
             Menu-Exportacao -registros $registros
         }
         
-        "8" {
+        "9" {
             # ------------------------------------------------------------------
-            # OPCAO 8: DASHBOARD EXECUTIVO E METRICAS
+            # OPCAO 9: DASHBOARD EXECUTIVO E METRICAS
             # ------------------------------------------------------------------
             $registros = Obter-RegistrosCsv -caminho $caminhoCsv
             Menu-Estatisticas -registros $registros
         }
 
-        "9" {
+        "10" {
             # ------------------------------------------------------------------
-            # OPCAO 9: SINCRONIZAR COM INNOVSTOCK (FIREBASE CLOUD)
+            # OPCAO 10: SINCRONIZAR COM INNOVSTOCK (FIREBASE CLOUD)
             # ------------------------------------------------------------------
             $scriptSync = Join-Path $scriptRootDir "core\sincronizar_innovstock.ps1"
             if (-not (Test-Path $scriptSync)) {
@@ -3271,22 +6007,75 @@ while ($executando) {
             }
         }
         
+        "1" {
+            # ------------------------------------------------------------------
+            # OPCAO 1: MODULO 1 - REGISTRO DE ATIVOS E PATRIMONIO
+            # ------------------------------------------------------------------
+            Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos
+        }
+
+        "a" { Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos }
+        "ativo" { Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos }
+        "ativos" { Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos }
+        "patrimonio" { Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos }
+        "bens" { Menu-ModuloAtivos -caminhoCsvAtivos $script:caminhoCsvAtivos }
+
         "0" {
             # ------------------------------------------------------------------
-            # SAIR
+            # SAIR DO SISTEMA (COM CONFIRMACAO)
             # ------------------------------------------------------------------
-            $executando = $false
             try { Clear-Host } catch {}
             Exibir-LogoPrincipal
+            Write-Host " +======================================================================+" -ForegroundColor Cyan
+            Write-Host " |                  >>> ENCERRAR O SISTEMA <<<                        |" -ForegroundColor Yellow
+            Write-Host " +======================================================================+" -ForegroundColor Cyan
+            Write-Host "  Tudo que voce cadastrou permanece salvo no Pen Drive." -ForegroundColor Gray
             Write-Host ""
-            Write-Host "  Programa encerrado. Bom trabalho, Jordan!" -ForegroundColor Green
+
+            $ativosSaida = Obter-RegistrosCsv -caminho $script:caminhoCsvAtivos -empresaPadrao "InnovEdu"
+            $equipSaida = Obter-RegistrosCsv -caminho $caminhoCsv
+            Write-Host "  RESUMO DA BASE" -ForegroundColor Cyan
+            Write-Host "    Bens patrimoniais (Módulo 1): " -NoNewline -ForegroundColor Gray
+            Write-Host "$($ativosSaida.Count)" -ForegroundColor Green
+            Write-Host "    Equipamentos de TI (Módulo 2): " -NoNewline -ForegroundColor Gray
+            Write-Host "$($equipSaida.Count)" -ForegroundColor Green
+            Write-Host "    Planilha de ativos: " -NoNewline -ForegroundColor Gray
+            Write-Host "$script:caminhoCsvAtivos" -ForegroundColor DarkYellow
+            Write-Host "    Planilha de equipamentos: " -NoNewline -ForegroundColor Gray
+            Write-Host "$caminhoCsv" -ForegroundColor DarkYellow
             Write-Host ""
-            Start-Sleep -Milliseconds 1200
+            Write-Host "  [S] SIM - encerrar o InnovCore TI agora" -ForegroundColor Green
+            Write-Host "  [N] NAO  - voltar ao menu principal" -ForegroundColor Cyan
+            Write-Host ""
+
+            $confirmaSaida = Ler-OpcaoOuEsc -prompt "  Deseja realmente sair? (S/N)" -valorPadrao "N"
+
+            if ($confirmaSaida.Trim() -match '(?i)^s|sim|y|yes$') {
+                $executando = $false
+                try { Clear-Host } catch {}
+                Exibir-LogoPrincipal
+                Write-Host ""
+                Write-Host "  Programa encerrado. Bom trabalho, Jordan!" -ForegroundColor Green
+                Write-Host "  Os dados cadastrados permanecem salvos no Pen Drive." -ForegroundColor DarkGray
+                Write-Host ""
+                Start-Sleep -Milliseconds 1200
+            } else {
+                Write-Host ""
+                Write-Host " [i] Saida cancelada. Voltando ao menu principal..." -ForegroundColor Yellow
+                Start-Sleep -Milliseconds 600
+            }
         }
         
         default {
             Write-Host " Opcao invalida. Tente novamente." -ForegroundColor Red
             Start-Sleep -Milliseconds 800
         }
+    }
+    }
+    catch [System.OperationCanceledException] {
+        # ESC confirmado pelo usuario durante um preenchimento: aborta com seguranca
+        Write-Host ""
+        Write-Host " [i] Operacao cancelada. Nada foi gravado. Voltando ao menu..." -ForegroundColor Yellow
+        Start-Sleep -Milliseconds 400
     }
 }

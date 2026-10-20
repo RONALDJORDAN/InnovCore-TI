@@ -1,14 +1,90 @@
-# Arquivos temporários e logs
+# ==========================================================================
+# InnovCore_TI — .gitignore
+# Stack: PowerShell + Bat (inventario de ativos / sincronizacao InnovStock)
+# Estrutura: VERSAO_DESENVOLVIMENTO/ e VERSAO_FINAL/
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# 1. Temporarios e logs de execucao
+# --------------------------------------------------------------------------
 *.log
 *.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.rej
 t_sec*.txt
 teste_*.ps1
 teste_*.txt
 in*.txt
 t*.txt
 
-# Backups e dados de inventário
+# --------------------------------------------------------------------------
+# 2. Backups locais de inventario (CSV)
+# --------------------------------------------------------------------------
 **/Backups/
+**/*_backup_*.csv
+**/*.backup
+
+# --------------------------------------------------------------------------
+# 3. Dados operacionais locais (gerados em runtime)
+# --------------------------------------------------------------------------
 **/dados/desktop/*.csv
 **/dados/mobile/*.csv
+**/dados/ativos/inventario_ativos_innovcore.csv
+**/dados/ativos/termos_emitidos.csv
 **/Exportacoes/*.csv
+logs/
+
+# --------------------------------------------------------------------------
+# 4. Binarios e ferramentas locais
+# --------------------------------------------------------------------------
+*.exe
+*.dll
+*.pdb
+*.bak
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Excecao: platform-tools do Android SDK e versionado de proposito
+!**/platform-tools/*.exe
+!**/platform-tools/*.dll
+
+# --------------------------------------------------------------------------
+# 5. Ambiente, credenciais e segredos
+# --------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.template
+*.key
+*.pem
+*.pfx
+*.p12
+service-account*.json
+
+# --------------------------------------------------------------------------
+# 6. IDEs e ferramentas de agente (local)
+# --------------------------------------------------------------------------
+.vs/
+.vscode/
+.idea/
+.opencode/
+scratch/
+*.code-workspace
+*.user
+*.suo
+
+# --------------------------------------------------------------------------
+# 7. Sistema operacional
+# --------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+*.lnk

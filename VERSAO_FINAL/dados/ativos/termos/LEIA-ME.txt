@@ -1,0 +1,14 @@
+﻿=====================================================================
+        INNOVCORE TI - TERMOS DE RESPONSABILIDADE E CUSTODIA
+=====================================================================
+
+ Os termos gerados pela opcao [6] do Modulo 1 (Registro de Ativos)
+ sao gravados nesta pasta em dois formatos:
+
+   .TXT  - Termo de responsabilidade em texto simples
+   .HTML - Termo formatado, pronto para imprimir (Ctrl + P)
+
+ O historico de todos os termos emitidos (quem recebeu, quando e qual
+ arquivo) fica registrado em 'termos_emitidos.csv', na pasta anterior.
+
+=====================================================================
